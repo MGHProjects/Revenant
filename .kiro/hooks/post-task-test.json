@@ -1,15 +1,15 @@
-﻿{
-  "version": "v1",
-  "hooks": [
-    {
-      "name": "Test suite after spec task",
-      "description": "Runs npm test when a spec task completes and feeds any failures back to the agent so it can fix them before the next task starts.",
-      "trigger": "PostTaskExecution",
-      "action": {
-        "type": "command",
-        "command": "npm test 2>&1",
-        "feedbackOnFailure": true
-      }
-    }
-  ]
+{
+    "version":  "v1",
+    "hooks":  [
+                  {
+                      "name":  "Test suite after spec task",
+                      "description":  "Runs npm test when a spec task completes and feeds any failures back to the agent so it can fix them before the next task starts.",
+                      "trigger":  "PostTaskExecution",
+                      "action":  {
+                                     "type":  "command",
+                                     "command":  "npm test 2\u003e\u00261",
+                                     "feedbackOnFailure":  true
+                                 }
+                  }
+              ]
 }
