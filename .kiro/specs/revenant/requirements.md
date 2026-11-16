@@ -35,7 +35,7 @@ Revenant is a link-rot checker and document patcher. It scans Markdown, HTML, or
 #### Acceptance Criteria
 
 1. WHEN the live request fails at DNS/connection, or returns 404 or 410, THE verdict SHALL be `dead`.
-2. WHEN the live request returns 5xx, THE SYSTEM SHALL retry once after 2 seconds, and IF the retry also returns 5xx or fails, THEN THE verdict SHALL be `dead`.
+2. WHEN the live request returns 5xx, THE SYSTEM SHALL retry once after 2 seconds; IF the retry also returns 5xx or fails at network level, THE verdict SHALL be `restless` with a reason stating the status code and that it was retried.
 3. WHEN the live request returns 401, 403, or 429, THE verdict SHALL be `restless`.
 4. WHEN the live request times out after 8 seconds with no response, THE verdict SHALL be `restless`.
 5. WHEN the live request returns 2xx after redirecting to a different registrable domain AND a Snapshot of the original URL exists AND the text similarity score between the live page and that Snapshot is below 0.2, THE verdict SHALL be `possessed`.
@@ -61,10 +61,10 @@ Revenant is a link-rot checker and document patcher. It scans Markdown, HTML, or
 
 #### Acceptance Criteria
 
-1. WHEN the user triggers a patch download, THE SYSTEM SHALL replace the URL of each `dead` Link that has a Resurrection with that Resurrection URL and deliver the result as a downloadable file in the same format as the original document.
+1. WHEN the user triggers a patch download, THE SYSTEM SHALL replace the URL of each `dead` or `possessed` Link that has a Resurrection with that Resurrection URL and deliver the result as a downloadable file in the same format as the original document.
 2. WHEN the user triggers a patch download, THE SYSTEM SHALL modify only the URL strings within Link target spans and leave all other document content unchanged.
-3. `alive` Links, `restless` Links, and `dead` Links that have no Resurrection SHALL NOT be modified by the patch operation.
-4. IF the input document has already been patched, THEN THE SYSTEM SHALL re-evaluate each link's status fresh at patch time and produce a byte-for-byte identical output to patching it once, based on the current live and archive state.
+3. `alive` Links, `restless` Links, and `dead` or `possessed` Links that have no Resurrection SHALL NOT be modified by the patch operation.
+4. IF the input document has already been patched (such that all previously replaced URLs are Wayback URLs judged `alive`), THEN THE SYSTEM SHALL produce a byte-for-byte identical output to patching it once.
 5. WHEN the user deselects a Link before triggering a patch download, THE SYSTEM SHALL treat that Link as excluded and leave its URL unchanged in the patched output.
 
 ### Requirement 5: Safe fetching
@@ -73,9 +73,9 @@ Revenant is a link-rot checker and document patcher. It scans Markdown, HTML, or
 
 #### Acceptance Criteria
 
-1. THE SYSTEM SHALL reject URLs whose scheme is not `http` or `https`, that contain credentials (userinfo component), or whose resolved host is an IP literal in the ranges 10.0.0.0/8, 172.16.0.0/12, 192.168.0.0/16, 127.0.0.0/8, 169.254.0.0/16, ::1, or fc00::/7, or whose hostname is `localhost`, or ends in `.local`, `.internal`, or `.localhost`.
+1. THE SYSTEM SHALL reject URLs whose scheme is not `http` or `https`, that contain credentials (userinfo component), or whose host is an IP literal in any form (including dotted-decimal, hex, octal, integer notation, IPv4-mapped IPv6 such as `::ffff:127.0.0.1`, link-local IPv6 `fe80::/10`, and CGNAT range `100.64.0.0/10`), or whose hostname is `localhost`, or ends in `.local`, `.internal`, or `.localhost`.
 2. WHEN a redirect response is received, THE SYSTEM SHALL re-validate the redirect target URL against all criteria in criterion 1 before following it, and SHALL reject the request if the total number of redirects for that request exceeds 5.
-3. WHEN an outbound request is initiated, THE SYSTEM SHALL independently report a timeout error if no complete response is received within 8 seconds, AND SHALL independently discard the response body and report a body-size error if the response body exceeds 512 KB; both errors SHALL be reported when both conditions hold simultaneously.
+3. Each request SHALL time out after 8 seconds and read at most 512 KB; IF the response body exceeds 512 KB THE SYSTEM SHALL stop reading after 512 KB and treat the truncated body as the full response.
 4. IF the number of in-flight outbound requests for the current scan is already 6, THEN THE SYSTEM SHALL queue the pending request and wait until a slot is free before sending it.
 
 ### Requirement 6: Graveyard (web)
@@ -84,14 +84,14 @@ Revenant is a link-rot checker and document patcher. It scans Markdown, HTML, or
 
 #### Acceptance Criteria
 
-1. WHEN a scan runs THEN results SHALL stream to the page and appear one by one in arrival order, with the moon icon advancing one step per result to reflect overall progress.
-2. Each verdict SHALL render with a distinct shape per status — a crumbling tombstone for `dead`, an upright tombstone for `alive`, and a leaning tombstone for `possessed` or `restless` — and each shape SHALL carry a visible text label matching the status name; colour SHALL NOT be the only differentiating signal.
-3. A `dead` link's tombstone SHALL display the Epitaph (first and last Snapshot dates), and the tombstone height SHALL scale linearly with the link's lifespan in whole years, with a minimum height at 0 years and a maximum height at 30 or more years.
+1. WHEN a scan runs, the browser SHALL send batches of at most 3 URLs at a time to `POST /api/scan`, sending at most 2 batches in flight simultaneously, and SHALL render each returned batch of Judgements as it arrives so results appear progressively with the moon advancing.
+2. Each verdict SHALL have a distinct visual element and a text label: a lit window (warm amber) for `alive`, a tombstone for `dead`, a zombie hand with green glow for `possessed`, and a fog patch for `restless`; colour SHALL NOT be the only differentiating signal.
+3. A `dead` link's tombstone SHALL display the Epitaph on its face, and tombstone height SHALL scale linearly with the link's lifespan in whole years, with a minimum height at 0 years and a maximum height at 30 or more years. A `possessed` link SHALL display its Epitaph on the zombie hand element.
 4. WHEN the user activates Resurrect on a grave THEN the Snapshot SHALL open in a new browser tab.
-5. IF no Snapshot exists for a `dead` link THEN the Resurrect control SHALL be disabled and display a label indicating no archived version is available.
-6. The page SHALL provide all scan results in a table (the ledger) with one row per link, showing at minimum: URL, verdict label, reason, and Resurrection URL where available; and SHALL provide a "download patched document" action that returns the source document with dead links replaced by their Resurrection URLs where available.
+5. IF no Snapshot exists for a `dead` or `possessed` link THEN the Resurrect control SHALL be disabled and display a label indicating no archived version is available.
+6. The page SHALL provide all scan results in a table (the ledger) with one row per link, showing at minimum: URL, verdict label, reason, and Resurrection URL where available; and SHALL provide a "download patched document" action that returns the source document with `dead` and `possessed` links replaced by their Resurrection URLs where available.
 7. IF `prefers-reduced-motion` is set THEN no animation SHALL play, including rising, drifting, fading, and pulsing effects.
-8. Every interactive control SHALL be reachable and operable by keyboard alone, and each new result appended during a scan SHALL be announced via an ARIA live region with politeness set to `polite`.
+8. Every interactive control SHALL be reachable and operable by keyboard alone, and new results SHALL be announced via a single polite `aria-live` region, batched rather than one announcement per link.
 9. The page SHALL offer a single-activation sample document control that loads a pre-supplied document and triggers a scan without requiring the user to provide any input.
 
 ### Requirement 7: CLI
@@ -103,7 +103,7 @@ Revenant is a link-rot checker and document patcher. It scans Markdown, HTML, or
 1. WHEN `revenant <file|url>` is invoked, THE SYSTEM SHALL print one line per non-alive Link to stdout, where each line contains the original URL, verdict (`dead`, `possessed`, or `restless`), reason, and Resurrection URL (or a placeholder indicating none when no Resurrection exists).
 2. THE SYSTEM SHALL exit with code 1 if any checked Link has verdict `dead` or `possessed`, and exit with code 0 if all Links are `alive` or `restless`.
 3. WHEN `revenant <file|url>` is invoked with no flags and all Links are `alive`, THE SYSTEM SHALL print no output and exit with code 0.
-4. WHEN `--fix` is provided, THE SYSTEM SHALL overwrite the input file in place, replacing each dead Link's URL with its Resurrection URL, leaving Links with no Resurrection unchanged.
+4. WHEN `--fix` is provided, THE SYSTEM SHALL overwrite the input file in place, replacing each `dead` or `possessed` Link's URL with its Resurrection URL, leaving Links with no Resurrection unchanged.
 5. IF `--fix` is provided and the input is a URL rather than a file path, THEN THE SYSTEM SHALL report an error indicating that `--fix` requires a file path, emit that error as a JSON structure when `--json` is also set, and exit with code 2.
 6. WHEN `--json` is provided, THE SYSTEM SHALL print a single JSON structure to stdout containing every checked Link with its URL, verdict, reason, and Resurrection URL, and SHALL NOT print the plain-text per-line format.
 
