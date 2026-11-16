@@ -1,0 +1,32 @@
+{
+  "version": "v1",
+  "hooks": [
+    {
+      "name": "Typecheck on save",
+      "description": "Catch type errors the moment the agent saves TypeScript.",
+      "trigger": "PostFileSave",
+      "matcher": "\\.ts$",
+      "action": { "type": "command", "command": "npx tsc --noEmit" }
+    },
+    {
+      "name": "Core change needs its property",
+      "description": "Keeps the pure core and its correctness properties in step.",
+      "trigger": "PostFileSave",
+      "matcher": "src/core/.*\\.ts$",
+      "action": {
+        "type": "agent",
+        "prompt": "A file in src/core changed. Check .kiro/specs/revenant/design.md 'Correctness Properties': if this change affects a property, update or add the matching fast-check test in test/*.prop.test.ts, then run npm test. Confirm the file still imports nothing outside src/core and uses no fetch, Date.now or globals."
+      }
+    },
+    {
+      "name": "Costume check",
+      "description": "Every spooky element must encode state and stay accessible.",
+      "trigger": "PostFileSave",
+      "matcher": "web/.*\\.(ts|css|html)$",
+      "action": {
+        "type": "agent",
+        "prompt": "A web file changed. Review it against .kiro/steering/costume.md: verdict is never colour-only, prefers-reduced-motion is honoured, new controls are keyboard reachable, and no decorative element was added that carries no meaning. Fix violations; otherwise say nothing."
+      }
+    }
+  ]
+}
