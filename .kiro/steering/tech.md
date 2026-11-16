@@ -22,6 +22,20 @@ inclusion: always
 Be a polite client: descriptive User-Agent, at most 6 concurrent requests, cache Wayback answers
 with the Workers Cache API for 24 h, back off on 429.
 
+## Cloudflare free plan (decided 16 Nov 2026)
+
+The Worker runs on the free plan: **50 subrequests and 10 ms CPU per request**. So:
+
+- The browser runs `extract` itself (core is pure and bundled) and owns the 200-link cap.
+- `POST /api/scan` takes `{ urls: string[] }` with **at most 3 URLs** and returns
+  `{ judgements: Judgement[] }` as plain JSON. No SSE. Worst case per URL is 2 attempts × 6 hops
+  + 3 Wayback calls = 15 subrequests, so 3 URLs stay under 50.
+- The browser sends 2 batches at a time (6 links in flight). Graves rise as batches return.
+- Resolving a page URL or `owner/repo` into source text is its own endpoint, `POST /api/resolve`.
+- `similarity` runs only on the first 64 KB of visible text of each side, to stay inside 10 ms CPU.
+  `// shortcut: fixed 64 KB cap, raise it if the Worker is moved to the paid plan.`
+- CLI and MCP run on Node with no such limits and use `scan` with a pool of 6 directly.
+
 ## Non-negotiable rules
 
 - `src/core` is pure: no `fetch`, no `Date.now()`, no globals. Network goes through an injected
