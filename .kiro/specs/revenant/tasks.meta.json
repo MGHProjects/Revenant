@@ -1,0 +1,1156 @@
+{
+  "pbtResults": {
+    "2.4 Write property test for `guard` in `test/guard.prop.test.ts` using the `arbUrl()` generator.": {
+      "status": "passed",
+      "lastRunTimestamp": 1794863450227
+    },
+    "3.3 Write property test for `extract` in `test/extract.prop.test.ts` using `arbMarkdownSource(urls)` and `arbHtmlSource(urls)` generators.": {
+      "status": "passed",
+      "lastRunTimestamp": 1794990817730
+    },
+    "4.4 Write property test for `similarity` in `test/similarity.prop.test.ts`.": {
+      "status": "passed",
+      "lastRunTimestamp": 1794990824710
+    },
+    "4.8 Write property test for `classify` in `test/classify.prop.test.ts` using the `arbProbe()` generator.": {
+      "status": "passed",
+      "lastRunTimestamp": 1794990989557
+    },
+    "5.3 Write property tests for `patch` in `test/patch.prop.test.ts` using `arbMarkdownSource` and `arbJudgements(links)` generators.": {
+      "status": "passed",
+      "lastRunTimestamp": 1794991171914
+    },
+    "6.5 Write a property test for the concurrency pool in `test/scan.prop.test.ts` using an instrumented fake `Fetcher`.": {
+      "status": "passed",
+      "lastRunTimestamp": 1794991382930
+    },
+    "6.6 Write a property test for the deduplication invariant at scan level in `test/scan.prop.test.ts`.": {
+      "status": "passed",
+      "lastRunTimestamp": 1794991489370
+    }
+  },
+  "executionHistory": {
+    "1. Scaffold project structure and tooling": [
+      {
+        "executionId": "c4d7517e-1191-4dc0-b426-8a94cc6d70a2",
+        "chatSessionId": "sess_866ff226-1295-4842-aca2-3d1631f5c2e3",
+        "timestamp": 1794856777888
+      },
+      {
+        "executionId": "c4d7517e-1191-4dc0-b426-8a94cc6d70a2",
+        "chatSessionId": "sess_866ff226-1295-4842-aca2-3d1631f5c2e3",
+        "timestamp": 1794856787723
+      },
+      {
+        "executionId": "c4d7517e-1191-4dc0-b426-8a94cc6d70a2",
+        "chatSessionId": "sess_866ff226-1295-4842-aca2-3d1631f5c2e3",
+        "timestamp": 1794856921567
+      }
+    ],
+    "2.1 Write `src/core/types.ts` with the exact types from the design: `Verdict`, `Link`, `Probe`, `Epitaph`, `Judgement`, `Fetcher`, `Wayback`, `ScanEvent`.": [
+      {
+        "executionId": "c4d7517e-1191-4dc0-b426-8a94cc6d70a2",
+        "chatSessionId": "sess_866ff226-1295-4842-aca2-3d1631f5c2e3",
+        "timestamp": 1794856777958
+      },
+      {
+        "executionId": "c4d7517e-1191-4dc0-b426-8a94cc6d70a2",
+        "chatSessionId": "sess_866ff226-1295-4842-aca2-3d1631f5c2e3",
+        "timestamp": 1794856923900
+      },
+      {
+        "executionId": "c4d7517e-1191-4dc0-b426-8a94cc6d70a2",
+        "chatSessionId": "sess_866ff226-1295-4842-aca2-3d1631f5c2e3",
+        "timestamp": 1794856963196
+      }
+    ],
+    "2.2 Implement `guard(url: string)` in `src/core/guard.ts`: return `{ ok: false, reason }` when: scheme is not `http`/`https`; URL contains userinfo; host is an IP literal in any form (dotted-decimal, hex, octal, integer, IPv4-mapped IPv6 `::ffff:...`, link-local IPv6 `fe80::/10`, loopback `::1`, ULA `fc00::/7`, CGNAT `100.64.0.0/10`, or private/loopback IPv4: 10/8, 172.16/12, 192.168/16, 127/8, 169.254/16, 0.0.0.0/8); hostname is `localhost` or ends in `.local`, `.internal`, `.localhost`. Otherwise return `{ ok: true }`.": [
+      {
+        "executionId": "c4d7517e-1191-4dc0-b426-8a94cc6d70a2",
+        "chatSessionId": "sess_866ff226-1295-4842-aca2-3d1631f5c2e3",
+        "timestamp": 1794856778010
+      },
+      {
+        "executionId": "c4d7517e-1191-4dc0-b426-8a94cc6d70a2",
+        "chatSessionId": "sess_866ff226-1295-4842-aca2-3d1631f5c2e3",
+        "timestamp": 1794856966149
+      },
+      {
+        "executionId": "d7ab9d70-c23b-4ff4-9b12-9e9f5e3b02ff",
+        "chatSessionId": "sess_8d78ae8d-4b9e-4da3-9ce6-0cc50896ade6",
+        "timestamp": 1794863305785
+      },
+      {
+        "executionId": "d7ab9d70-c23b-4ff4-9b12-9e9f5e3b02ff",
+        "chatSessionId": "sess_8d78ae8d-4b9e-4da3-9ce6-0cc50896ade6",
+        "timestamp": 1794863312974
+      },
+      {
+        "executionId": "d7ab9d70-c23b-4ff4-9b12-9e9f5e3b02ff",
+        "chatSessionId": "sess_8d78ae8d-4b9e-4da3-9ce6-0cc50896ade6",
+        "timestamp": 1794863387175
+      }
+    ],
+    "2.3 Write unit tests for `guard` in `test/guard.test.ts` covering each blocked IP range (including hex/octal/integer notation and IPv4-mapped IPv6), each blocked hostname pattern, each scheme variant, and a URL with credentials.": [
+      {
+        "executionId": "c4d7517e-1191-4dc0-b426-8a94cc6d70a2",
+        "chatSessionId": "sess_866ff226-1295-4842-aca2-3d1631f5c2e3",
+        "timestamp": 1794856778056
+      },
+      {
+        "executionId": "d7ab9d70-c23b-4ff4-9b12-9e9f5e3b02ff",
+        "chatSessionId": "sess_8d78ae8d-4b9e-4da3-9ce6-0cc50896ade6",
+        "timestamp": 1794863305864
+      },
+      {
+        "executionId": "d7ab9d70-c23b-4ff4-9b12-9e9f5e3b02ff",
+        "chatSessionId": "sess_8d78ae8d-4b9e-4da3-9ce6-0cc50896ade6",
+        "timestamp": 1794863389485
+      },
+      {
+        "executionId": "d7ab9d70-c23b-4ff4-9b12-9e9f5e3b02ff",
+        "chatSessionId": "sess_8d78ae8d-4b9e-4da3-9ce6-0cc50896ade6",
+        "timestamp": 1794863459099
+      }
+    ],
+    "2.4 Write property test for `guard` in `test/guard.prop.test.ts` using the `arbUrl()` generator.": [
+      {
+        "executionId": "c4d7517e-1191-4dc0-b426-8a94cc6d70a2",
+        "chatSessionId": "sess_866ff226-1295-4842-aca2-3d1631f5c2e3",
+        "timestamp": 1794856778102
+      },
+      {
+        "executionId": "d7ab9d70-c23b-4ff4-9b12-9e9f5e3b02ff",
+        "chatSessionId": "sess_8d78ae8d-4b9e-4da3-9ce6-0cc50896ade6",
+        "timestamp": 1794863305923
+      },
+      {
+        "executionId": "d7ab9d70-c23b-4ff4-9b12-9e9f5e3b02ff",
+        "chatSessionId": "sess_8d78ae8d-4b9e-4da3-9ce6-0cc50896ade6",
+        "timestamp": 1794863391502
+      },
+      {
+        "executionId": "d7ab9d70-c23b-4ff4-9b12-9e9f5e3b02ff",
+        "chatSessionId": "sess_8d78ae8d-4b9e-4da3-9ce6-0cc50896ade6",
+        "timestamp": 1794863461158
+      }
+    ],
+    "3.1 Implement `extract(source: string, kind: 'markdown' | 'html'): Link[]` in `src/core/extract.ts`. Markdown: inline `[text](url)`, reference `[text][id]` + `[id]: url`, autolinks `<url>`, bare URLs not enclosed in `<>` or `[]()`. HTML: `href` from every `<a>`. Record byte `start`/`end` for the URL portion. Exclude URLs inside fenced blocks (`` ``` `` or `~~~`). Exclude non-http(s) schemes. Deduplicate by exact URL string; one `Link` with all spans in encounter order.": [
+      {
+        "executionId": "c4d7517e-1191-4dc0-b426-8a94cc6d70a2",
+        "chatSessionId": "sess_866ff226-1295-4842-aca2-3d1631f5c2e3",
+        "timestamp": 1794856778166
+      },
+      {
+        "executionId": "d7ab9d70-c23b-4ff4-9b12-9e9f5e3b02ff",
+        "chatSessionId": "sess_8d78ae8d-4b9e-4da3-9ce6-0cc50896ade6",
+        "timestamp": 1794863305978
+      },
+      {
+        "executionId": "d7ab9d70-c23b-4ff4-9b12-9e9f5e3b02ff",
+        "chatSessionId": "sess_8d78ae8d-4b9e-4da3-9ce6-0cc50896ade6",
+        "timestamp": 1794863464373
+      },
+      {
+        "executionId": "d7ab9d70-c23b-4ff4-9b12-9e9f5e3b02ff",
+        "chatSessionId": "sess_8d78ae8d-4b9e-4da3-9ce6-0cc50896ade6",
+        "timestamp": 1794864110999
+      }
+    ],
+    "3.2 Write unit tests for `extract` in `test/extract.test.ts`: all four Markdown forms, fenced-block exclusion, deduplication, `mailto:` exclusion, HTML href extraction, mixed content.": [
+      {
+        "executionId": "c4d7517e-1191-4dc0-b426-8a94cc6d70a2",
+        "chatSessionId": "sess_866ff226-1295-4842-aca2-3d1631f5c2e3",
+        "timestamp": 1794856778207
+      },
+      {
+        "executionId": "d7ab9d70-c23b-4ff4-9b12-9e9f5e3b02ff",
+        "chatSessionId": "sess_8d78ae8d-4b9e-4da3-9ce6-0cc50896ade6",
+        "timestamp": 1794863306027
+      },
+      {
+        "executionId": "d7ab9d70-c23b-4ff4-9b12-9e9f5e3b02ff",
+        "chatSessionId": "sess_8d78ae8d-4b9e-4da3-9ce6-0cc50896ade6",
+        "timestamp": 1794864126337
+      },
+      {
+        "executionId": "32dc892f-b3f7-46bd-9429-87d81aac627e",
+        "chatSessionId": "sess_e72fc9f8-796b-436a-a688-fd774785d218",
+        "timestamp": 1794990730328
+      },
+      {
+        "executionId": "32dc892f-b3f7-46bd-9429-87d81aac627e",
+        "chatSessionId": "sess_e72fc9f8-796b-436a-a688-fd774785d218",
+        "timestamp": 1794990730599
+      },
+      {
+        "executionId": "32dc892f-b3f7-46bd-9429-87d81aac627e",
+        "chatSessionId": "sess_e72fc9f8-796b-436a-a688-fd774785d218",
+        "timestamp": 1794990735667
+      },
+      {
+        "executionId": "32dc892f-b3f7-46bd-9429-87d81aac627e",
+        "chatSessionId": "sess_e72fc9f8-796b-436a-a688-fd774785d218",
+        "timestamp": 1794990917286
+      }
+    ],
+    "3.3 Write property test for `extract` in `test/extract.prop.test.ts` using `arbMarkdownSource(urls)` and `arbHtmlSource(urls)` generators.": [
+      {
+        "executionId": "c4d7517e-1191-4dc0-b426-8a94cc6d70a2",
+        "chatSessionId": "sess_866ff226-1295-4842-aca2-3d1631f5c2e3",
+        "timestamp": 1794856778250
+      },
+      {
+        "executionId": "d7ab9d70-c23b-4ff4-9b12-9e9f5e3b02ff",
+        "chatSessionId": "sess_8d78ae8d-4b9e-4da3-9ce6-0cc50896ade6",
+        "timestamp": 1794863306081
+      },
+      {
+        "executionId": "d7ab9d70-c23b-4ff4-9b12-9e9f5e3b02ff",
+        "chatSessionId": "sess_8d78ae8d-4b9e-4da3-9ce6-0cc50896ade6",
+        "timestamp": 1794864128513
+      },
+      {
+        "executionId": "32dc892f-b3f7-46bd-9429-87d81aac627e",
+        "chatSessionId": "sess_e72fc9f8-796b-436a-a688-fd774785d218",
+        "timestamp": 1794990730418
+      },
+      {
+        "executionId": "32dc892f-b3f7-46bd-9429-87d81aac627e",
+        "chatSessionId": "sess_e72fc9f8-796b-436a-a688-fd774785d218",
+        "timestamp": 1794990730653
+      },
+      {
+        "executionId": "32dc892f-b3f7-46bd-9429-87d81aac627e",
+        "chatSessionId": "sess_e72fc9f8-796b-436a-a688-fd774785d218",
+        "timestamp": 1794990737921
+      },
+      {
+        "executionId": "32dc892f-b3f7-46bd-9429-87d81aac627e",
+        "chatSessionId": "sess_e72fc9f8-796b-436a-a688-fd774785d218",
+        "timestamp": 1794990919867
+      }
+    ],
+    "4.1 Implement `visible-text(html: string): string` in `src/core/visible-text.ts` using a hand-written tokenizer (no DOM dependency) that strips all tags and removes `<script>` and `<style>` block content.": [
+      {
+        "executionId": "c4d7517e-1191-4dc0-b426-8a94cc6d70a2",
+        "chatSessionId": "sess_866ff226-1295-4842-aca2-3d1631f5c2e3",
+        "timestamp": 1794856778293
+      },
+      {
+        "executionId": "d7ab9d70-c23b-4ff4-9b12-9e9f5e3b02ff",
+        "chatSessionId": "sess_8d78ae8d-4b9e-4da3-9ce6-0cc50896ade6",
+        "timestamp": 1794863306131
+      },
+      {
+        "executionId": "d7ab9d70-c23b-4ff4-9b12-9e9f5e3b02ff",
+        "chatSessionId": "sess_8d78ae8d-4b9e-4da3-9ce6-0cc50896ade6",
+        "timestamp": 1794863466517
+      },
+      {
+        "executionId": "d7ab9d70-c23b-4ff4-9b12-9e9f5e3b02ff",
+        "chatSessionId": "sess_8d78ae8d-4b9e-4da3-9ce6-0cc50896ade6",
+        "timestamp": 1794864113399
+      }
+    ],
+    "4.2 Implement `similarity(a: string, b: string): number` in `src/core/similarity.ts` as the Jaccard index over 3-word shingles. Returns `[0, 1]`; returns `0` for empty strings; symmetric. In the Worker context, similarity is computed on the first 64 KB of each string.": [
+      {
+        "executionId": "c4d7517e-1191-4dc0-b426-8a94cc6d70a2",
+        "chatSessionId": "sess_866ff226-1295-4842-aca2-3d1631f5c2e3",
+        "timestamp": 1794856778336
+      },
+      {
+        "executionId": "d7ab9d70-c23b-4ff4-9b12-9e9f5e3b02ff",
+        "chatSessionId": "sess_8d78ae8d-4b9e-4da3-9ce6-0cc50896ade6",
+        "timestamp": 1794863306206
+      },
+      {
+        "executionId": "d7ab9d70-c23b-4ff4-9b12-9e9f5e3b02ff",
+        "chatSessionId": "sess_8d78ae8d-4b9e-4da3-9ce6-0cc50896ade6",
+        "timestamp": 1794863468684
+      },
+      {
+        "executionId": "d7ab9d70-c23b-4ff4-9b12-9e9f5e3b02ff",
+        "chatSessionId": "sess_8d78ae8d-4b9e-4da3-9ce6-0cc50896ade6",
+        "timestamp": 1794864116281
+      }
+    ],
+    "4.3 Write unit tests for `similarity` in `test/similarity.test.ts` using calibration examples from `docs/brief/calibration.md` (paul graham ~1.0, kiko.com ~0.0, HN ~0.13) plus empty-string and identical-string edge cases.": [
+      {
+        "executionId": "c4d7517e-1191-4dc0-b426-8a94cc6d70a2",
+        "chatSessionId": "sess_866ff226-1295-4842-aca2-3d1631f5c2e3",
+        "timestamp": 1794856778376
+      },
+      {
+        "executionId": "d7ab9d70-c23b-4ff4-9b12-9e9f5e3b02ff",
+        "chatSessionId": "sess_8d78ae8d-4b9e-4da3-9ce6-0cc50896ade6",
+        "timestamp": 1794863306253
+      },
+      {
+        "executionId": "d7ab9d70-c23b-4ff4-9b12-9e9f5e3b02ff",
+        "chatSessionId": "sess_8d78ae8d-4b9e-4da3-9ce6-0cc50896ade6",
+        "timestamp": 1794864122277
+      },
+      {
+        "executionId": "32dc892f-b3f7-46bd-9429-87d81aac627e",
+        "chatSessionId": "sess_e72fc9f8-796b-436a-a688-fd774785d218",
+        "timestamp": 1794990730475
+      },
+      {
+        "executionId": "32dc892f-b3f7-46bd-9429-87d81aac627e",
+        "chatSessionId": "sess_e72fc9f8-796b-436a-a688-fd774785d218",
+        "timestamp": 1794990730702
+      },
+      {
+        "executionId": "32dc892f-b3f7-46bd-9429-87d81aac627e",
+        "chatSessionId": "sess_e72fc9f8-796b-436a-a688-fd774785d218",
+        "timestamp": 1794990740314
+      },
+      {
+        "executionId": "32dc892f-b3f7-46bd-9429-87d81aac627e",
+        "chatSessionId": "sess_e72fc9f8-796b-436a-a688-fd774785d218",
+        "timestamp": 1794990922879
+      }
+    ],
+    "4.4 Write property test for `similarity` in `test/similarity.prop.test.ts`.": [
+      {
+        "executionId": "c4d7517e-1191-4dc0-b426-8a94cc6d70a2",
+        "chatSessionId": "sess_866ff226-1295-4842-aca2-3d1631f5c2e3",
+        "timestamp": 1794856778418
+      },
+      {
+        "executionId": "d7ab9d70-c23b-4ff4-9b12-9e9f5e3b02ff",
+        "chatSessionId": "sess_8d78ae8d-4b9e-4da3-9ce6-0cc50896ade6",
+        "timestamp": 1794863306316
+      },
+      {
+        "executionId": "d7ab9d70-c23b-4ff4-9b12-9e9f5e3b02ff",
+        "chatSessionId": "sess_8d78ae8d-4b9e-4da3-9ce6-0cc50896ade6",
+        "timestamp": 1794864124265
+      },
+      {
+        "executionId": "32dc892f-b3f7-46bd-9429-87d81aac627e",
+        "chatSessionId": "sess_e72fc9f8-796b-436a-a688-fd774785d218",
+        "timestamp": 1794990730526
+      },
+      {
+        "executionId": "32dc892f-b3f7-46bd-9429-87d81aac627e",
+        "chatSessionId": "sess_e72fc9f8-796b-436a-a688-fd774785d218",
+        "timestamp": 1794990730749
+      },
+      {
+        "executionId": "32dc892f-b3f7-46bd-9429-87d81aac627e",
+        "chatSessionId": "sess_e72fc9f8-796b-436a-a688-fd774785d218",
+        "timestamp": 1794990742540
+      },
+      {
+        "executionId": "32dc892f-b3f7-46bd-9429-87d81aac627e",
+        "chatSessionId": "sess_e72fc9f8-796b-436a-a688-fd774785d218",
+        "timestamp": 1794990925263
+      }
+    ],
+    "4.5 Implement the registrable-domain helper in `src/core/domain.ts`: return the last two hostname labels, treating `co.uk`, `com.au`, `org.uk`, `net.au`, `co.nz`, `org.nz`, `com.br`, `co.jp` as two-label effective TLDs.": [
+      {
+        "executionId": "c4d7517e-1191-4dc0-b426-8a94cc6d70a2",
+        "chatSessionId": "sess_866ff226-1295-4842-aca2-3d1631f5c2e3",
+        "timestamp": 1794856778463
+      },
+      {
+        "executionId": "d7ab9d70-c23b-4ff4-9b12-9e9f5e3b02ff",
+        "chatSessionId": "sess_8d78ae8d-4b9e-4da3-9ce6-0cc50896ade6",
+        "timestamp": 1794863306375
+      },
+      {
+        "executionId": "d7ab9d70-c23b-4ff4-9b12-9e9f5e3b02ff",
+        "chatSessionId": "sess_8d78ae8d-4b9e-4da3-9ce6-0cc50896ade6",
+        "timestamp": 1794863470914
+      },
+      {
+        "executionId": "d7ab9d70-c23b-4ff4-9b12-9e9f5e3b02ff",
+        "chatSessionId": "sess_8d78ae8d-4b9e-4da3-9ce6-0cc50896ade6",
+        "timestamp": 1794864118894
+      }
+    ],
+    "4.6 Implement `classify(probe: Probe, originalUrl: string, snapshotText?: string): { verdict: Verdict; reason: string }` in `src/core/classify.ts` following the decision table exactly: `timeout` → `restless`; `network-error` → `dead`; 401/403/429 → `restless`; 404/410 → `dead`; 5xx (after retry) → `restless` with `{status} after retry`; 2xx + different domain + snapshotText + similarity < 0.2 → `possessed`; 2xx + different domain + no snapshotText → `alive`; 2xx → `alive`. Never `possessed` when `finalUrl` shares the same registrable domain as `originalUrl`.": [
+      {
+        "executionId": "c4d7517e-1191-4dc0-b426-8a94cc6d70a2",
+        "chatSessionId": "sess_866ff226-1295-4842-aca2-3d1631f5c2e3",
+        "timestamp": 1794856778511
+      },
+      {
+        "executionId": "d7ab9d70-c23b-4ff4-9b12-9e9f5e3b02ff",
+        "chatSessionId": "sess_8d78ae8d-4b9e-4da3-9ce6-0cc50896ade6",
+        "timestamp": 1794863306429
+      },
+      {
+        "executionId": "d7ab9d70-c23b-4ff4-9b12-9e9f5e3b02ff",
+        "chatSessionId": "sess_8d78ae8d-4b9e-4da3-9ce6-0cc50896ade6",
+        "timestamp": 1794864131140
+      },
+      {
+        "executionId": "32dc892f-b3f7-46bd-9429-87d81aac627e",
+        "chatSessionId": "sess_e72fc9f8-796b-436a-a688-fd774785d218",
+        "timestamp": 1794990730799
+      },
+      {
+        "executionId": "32dc892f-b3f7-46bd-9429-87d81aac627e",
+        "chatSessionId": "sess_e72fc9f8-796b-436a-a688-fd774785d218",
+        "timestamp": 1794990745429
+      },
+      {
+        "executionId": "32dc892f-b3f7-46bd-9429-87d81aac627e",
+        "chatSessionId": "sess_e72fc9f8-796b-436a-a688-fd774785d218",
+        "timestamp": 1794990928883
+      }
+    ],
+    "4.7 Write unit tests for `classify` in `test/classify.test.ts` with one `Probe` fixture per decision-table row: DNS failure, 404, 410, 5xx after retry, 401, 403, 429, timeout, 2xx same domain, 2xx cross-domain with low similarity, 2xx cross-domain no snapshot, 2xx cross-domain high similarity.": [
+      {
+        "executionId": "c4d7517e-1191-4dc0-b426-8a94cc6d70a2",
+        "chatSessionId": "sess_866ff226-1295-4842-aca2-3d1631f5c2e3",
+        "timestamp": 1794856778556
+      },
+      {
+        "executionId": "d7ab9d70-c23b-4ff4-9b12-9e9f5e3b02ff",
+        "chatSessionId": "sess_8d78ae8d-4b9e-4da3-9ce6-0cc50896ade6",
+        "timestamp": 1794863306478
+      },
+      {
+        "executionId": "32dc892f-b3f7-46bd-9429-87d81aac627e",
+        "chatSessionId": "sess_e72fc9f8-796b-436a-a688-fd774785d218",
+        "timestamp": 1794990931724
+      },
+      {
+        "executionId": "32dc892f-b3f7-46bd-9429-87d81aac627e",
+        "chatSessionId": "sess_e72fc9f8-796b-436a-a688-fd774785d218",
+        "timestamp": 1794991080858
+      }
+    ],
+    "4.8 Write property test for `classify` in `test/classify.prop.test.ts` using the `arbProbe()` generator.": [
+      {
+        "executionId": "c4d7517e-1191-4dc0-b426-8a94cc6d70a2",
+        "chatSessionId": "sess_866ff226-1295-4842-aca2-3d1631f5c2e3",
+        "timestamp": 1794856778600
+      },
+      {
+        "executionId": "d7ab9d70-c23b-4ff4-9b12-9e9f5e3b02ff",
+        "chatSessionId": "sess_8d78ae8d-4b9e-4da3-9ce6-0cc50896ade6",
+        "timestamp": 1794863306528
+      },
+      {
+        "executionId": "32dc892f-b3f7-46bd-9429-87d81aac627e",
+        "chatSessionId": "sess_e72fc9f8-796b-436a-a688-fd774785d218",
+        "timestamp": 1794990934250
+      },
+      {
+        "executionId": "32dc892f-b3f7-46bd-9429-87d81aac627e",
+        "chatSessionId": "sess_e72fc9f8-796b-436a-a688-fd774785d218",
+        "timestamp": 1794991083292
+      }
+    ],
+    "5.1 Implement `patch(source: string, judgements: Judgement[], excluded: Set<string>): string` in `src/core/patch.ts`. Replace URL spans for `dead` or `possessed` links that have a `resurrection` and are not in `excluded`. Sort spans by `start` descending; apply right-to-left. Copy all other bytes verbatim. Leave `alive`, `restless`, unresurrectable, and excluded links unchanged.": [
+      {
+        "executionId": "c4d7517e-1191-4dc0-b426-8a94cc6d70a2",
+        "chatSessionId": "sess_866ff226-1295-4842-aca2-3d1631f5c2e3",
+        "timestamp": 1794856778645
+      },
+      {
+        "executionId": "d7ab9d70-c23b-4ff4-9b12-9e9f5e3b02ff",
+        "chatSessionId": "sess_8d78ae8d-4b9e-4da3-9ce6-0cc50896ade6",
+        "timestamp": 1794863306574
+      },
+      {
+        "executionId": "32dc892f-b3f7-46bd-9429-87d81aac627e",
+        "chatSessionId": "sess_e72fc9f8-796b-436a-a688-fd774785d218",
+        "timestamp": 1794990937044
+      },
+      {
+        "executionId": "32dc892f-b3f7-46bd-9429-87d81aac627e",
+        "chatSessionId": "sess_e72fc9f8-796b-436a-a688-fd774785d218",
+        "timestamp": 1794991086129
+      }
+    ],
+    "5.2 Write unit tests for `patch` in `test/patch.test.ts`: single dead replacement, single possessed replacement, multiple replacements, excluded links left unchanged, no dead/possessed links (source unchanged), right-to-left ordering with adjacent spans.": [
+      {
+        "executionId": "c4d7517e-1191-4dc0-b426-8a94cc6d70a2",
+        "chatSessionId": "sess_866ff226-1295-4842-aca2-3d1631f5c2e3",
+        "timestamp": 1794856778687
+      },
+      {
+        "executionId": "d7ab9d70-c23b-4ff4-9b12-9e9f5e3b02ff",
+        "chatSessionId": "sess_8d78ae8d-4b9e-4da3-9ce6-0cc50896ade6",
+        "timestamp": 1794863306618
+      },
+      {
+        "executionId": "32dc892f-b3f7-46bd-9429-87d81aac627e",
+        "chatSessionId": "sess_e72fc9f8-796b-436a-a688-fd774785d218",
+        "timestamp": 1794991097154
+      },
+      {
+        "executionId": "32dc892f-b3f7-46bd-9429-87d81aac627e",
+        "chatSessionId": "sess_e72fc9f8-796b-436a-a688-fd774785d218",
+        "timestamp": 1794991195190
+      }
+    ],
+    "5.3 Write property tests for `patch` in `test/patch.prop.test.ts` using `arbMarkdownSource` and `arbJudgements(links)` generators.": [
+      {
+        "executionId": "c4d7517e-1191-4dc0-b426-8a94cc6d70a2",
+        "chatSessionId": "sess_866ff226-1295-4842-aca2-3d1631f5c2e3",
+        "timestamp": 1794856778729
+      },
+      {
+        "executionId": "d7ab9d70-c23b-4ff4-9b12-9e9f5e3b02ff",
+        "chatSessionId": "sess_8d78ae8d-4b9e-4da3-9ce6-0cc50896ade6",
+        "timestamp": 1794863306668
+      },
+      {
+        "executionId": "32dc892f-b3f7-46bd-9429-87d81aac627e",
+        "chatSessionId": "sess_e72fc9f8-796b-436a-a688-fd774785d218",
+        "timestamp": 1794991099648
+      },
+      {
+        "executionId": "32dc892f-b3f7-46bd-9429-87d81aac627e",
+        "chatSessionId": "sess_e72fc9f8-796b-436a-a688-fd774785d218",
+        "timestamp": 1794991197922
+      }
+    ],
+    "6.1 Implement the default `fetcher` in `src/net/fetcher.ts`. Manual redirect handling: call `guard()` on each target before following; reject after 5 redirects with `network-error`. Independent 8-second timeout returning `{ outcome: 'timeout' }` on expiry. Body size: stop reading at 512 KB and treat the truncated body as the full response (not an error).": [
+      {
+        "executionId": "c4d7517e-1191-4dc0-b426-8a94cc6d70a2",
+        "chatSessionId": "sess_866ff226-1295-4842-aca2-3d1631f5c2e3",
+        "timestamp": 1794856778772
+      },
+      {
+        "executionId": "d7ab9d70-c23b-4ff4-9b12-9e9f5e3b02ff",
+        "chatSessionId": "sess_8d78ae8d-4b9e-4da3-9ce6-0cc50896ade6",
+        "timestamp": 1794863306717
+      },
+      {
+        "executionId": "32dc892f-b3f7-46bd-9429-87d81aac627e",
+        "chatSessionId": "sess_e72fc9f8-796b-436a-a688-fd774785d218",
+        "timestamp": 1794991102549
+      },
+      {
+        "executionId": "32dc892f-b3f7-46bd-9429-87d81aac627e",
+        "chatSessionId": "sess_e72fc9f8-796b-436a-a688-fd774785d218",
+        "timestamp": 1794991201373
+      }
+    ],
+    "6.2 Implement the Wayback client in `src/net/wayback.ts` implementing the `Wayback` interface. `getEpitaph(url)`: CDX call with `limit=1` for first, `limit=-1` for last good capture. `getResurrection(url)`: build from CDX last timestamp as `https://web.archive.org/web/{timestamp}/{url}` — no Availability API call. `getSnapshotText(url)`: fetch `https://web.archive.org/web/{timestamp}id_/{url}` and pass through `visible-text`. Cache all responses 24 h (platform Cache API in Worker, in-memory `Map` keyed by URL in CLI/MCP). On 429: wait `Retry-After` (capped 10 s), retry once; on second failure set Epitaph `'unavailable'`. On connection error, HTTP error, or no response within 10 s: Epitaph `'unavailable'`.": [
+      {
+        "executionId": "c4d7517e-1191-4dc0-b426-8a94cc6d70a2",
+        "chatSessionId": "sess_866ff226-1295-4842-aca2-3d1631f5c2e3",
+        "timestamp": 1794856778814
+      },
+      {
+        "executionId": "d7ab9d70-c23b-4ff4-9b12-9e9f5e3b02ff",
+        "chatSessionId": "sess_8d78ae8d-4b9e-4da3-9ce6-0cc50896ade6",
+        "timestamp": 1794863306761
+      },
+      {
+        "executionId": "32dc892f-b3f7-46bd-9429-87d81aac627e",
+        "chatSessionId": "sess_e72fc9f8-796b-436a-a688-fd774785d218",
+        "timestamp": 1794991105758
+      },
+      {
+        "executionId": "32dc892f-b3f7-46bd-9429-87d81aac627e",
+        "chatSessionId": "sess_e72fc9f8-796b-436a-a688-fd774785d218",
+        "timestamp": 1794991206554
+      }
+    ],
+    "6.3 Implement `scan(input, kind, fetcher, wayback, now)` as an async generator in `src/net/scan.ts` yielding `ScanEvent`. Steps: (1) Resolve input — `'url'`: fetch page, detect Content-Type; `'repo'`: fetch GitHub README; on failure or undetectable type: yield `{ type: 'error' }` and halt. (2) `extract`. (3) Cap at 200, emit `meta` event. (4) `guard` each link; failing links yield `{ type: 'judgement', judgement: { verdict: 'restless' } }` immediately. (5) Pool of 6: `fetcher` → if 5xx retry once after 2 s → if 2xx cross-domain: `wayback.getSnapshotText` → `classify` → if `dead`/`possessed`: `wayback.getEpitaph` + build Resurrection from CDX last timestamp → yield `{ type: 'judgement' }`.": [
+      {
+        "executionId": "c4d7517e-1191-4dc0-b426-8a94cc6d70a2",
+        "chatSessionId": "sess_866ff226-1295-4842-aca2-3d1631f5c2e3",
+        "timestamp": 1794856778859
+      },
+      {
+        "executionId": "d7ab9d70-c23b-4ff4-9b12-9e9f5e3b02ff",
+        "chatSessionId": "sess_8d78ae8d-4b9e-4da3-9ce6-0cc50896ade6",
+        "timestamp": 1794863306812
+      },
+      {
+        "executionId": "32dc892f-b3f7-46bd-9429-87d81aac627e",
+        "chatSessionId": "sess_e72fc9f8-796b-436a-a688-fd774785d218",
+        "timestamp": 1794991210105
+      },
+      {
+        "executionId": "32dc892f-b3f7-46bd-9429-87d81aac627e",
+        "chatSessionId": "sess_e72fc9f8-796b-436a-a688-fd774785d218",
+        "timestamp": 1794991303373
+      }
+    ],
+    "6.4 Write unit tests for the Wayback client in `test/wayback.test.ts`: CDX success (first + last), Resurrection URL built from CDX timestamp (no `id_`, correct rendering form `web/{timestamp}/{url}`), snapshot text fetch, 429 back-off, CDX unreachable → `'unavailable'`.": [
+      {
+        "executionId": "c4d7517e-1191-4dc0-b426-8a94cc6d70a2",
+        "chatSessionId": "sess_866ff226-1295-4842-aca2-3d1631f5c2e3",
+        "timestamp": 1794856778904
+      },
+      {
+        "executionId": "d7ab9d70-c23b-4ff4-9b12-9e9f5e3b02ff",
+        "chatSessionId": "sess_8d78ae8d-4b9e-4da3-9ce6-0cc50896ade6",
+        "timestamp": 1794863306857
+      },
+      {
+        "executionId": "32dc892f-b3f7-46bd-9429-87d81aac627e",
+        "chatSessionId": "sess_e72fc9f8-796b-436a-a688-fd774785d218",
+        "timestamp": 1794991212820
+      },
+      {
+        "executionId": "32dc892f-b3f7-46bd-9429-87d81aac627e",
+        "chatSessionId": "sess_e72fc9f8-796b-436a-a688-fd774785d218",
+        "timestamp": 1794991306752
+      }
+    ],
+    "6.5 Write a property test for the concurrency pool in `test/scan.prop.test.ts` using an instrumented fake `Fetcher`.": [
+      {
+        "executionId": "c4d7517e-1191-4dc0-b426-8a94cc6d70a2",
+        "chatSessionId": "sess_866ff226-1295-4842-aca2-3d1631f5c2e3",
+        "timestamp": 1794856778946
+      },
+      {
+        "executionId": "d7ab9d70-c23b-4ff4-9b12-9e9f5e3b02ff",
+        "chatSessionId": "sess_8d78ae8d-4b9e-4da3-9ce6-0cc50896ade6",
+        "timestamp": 1794863306906
+      },
+      {
+        "executionId": "32dc892f-b3f7-46bd-9429-87d81aac627e",
+        "chatSessionId": "sess_e72fc9f8-796b-436a-a688-fd774785d218",
+        "timestamp": 1794991309621
+      },
+      {
+        "executionId": "32dc892f-b3f7-46bd-9429-87d81aac627e",
+        "chatSessionId": "sess_e72fc9f8-796b-436a-a688-fd774785d218",
+        "timestamp": 1794991497160
+      }
+    ],
+    "6.6 Write a property test for the deduplication invariant at scan level in `test/scan.prop.test.ts`.": [
+      {
+        "executionId": "c4d7517e-1191-4dc0-b426-8a94cc6d70a2",
+        "chatSessionId": "sess_866ff226-1295-4842-aca2-3d1631f5c2e3",
+        "timestamp": 1794856778992
+      },
+      {
+        "executionId": "d7ab9d70-c23b-4ff4-9b12-9e9f5e3b02ff",
+        "chatSessionId": "sess_8d78ae8d-4b9e-4da3-9ce6-0cc50896ade6",
+        "timestamp": 1794863306953
+      },
+      {
+        "executionId": "32dc892f-b3f7-46bd-9429-87d81aac627e",
+        "chatSessionId": "sess_e72fc9f8-796b-436a-a688-fd774785d218",
+        "timestamp": 1794991312568
+      },
+      {
+        "executionId": "32dc892f-b3f7-46bd-9429-87d81aac627e",
+        "chatSessionId": "sess_e72fc9f8-796b-436a-a688-fd774785d218",
+        "timestamp": 1794991499545
+      }
+    ],
+    "6.7 Write an integration test for `scan` in `test/scan.int.test.ts` using fake `Fetcher` and fake `Wayback` over a 10-link document. Cover: DNS failure (→ `dead`), 404 (→ `dead`), 5xx with successful retry (→ `alive`), 5xx with failed retry (→ `restless`), 403 (→ `restless`), timeout (→ `restless`), 2xx same-domain redirect (→ `alive`), 2xx cross-domain with low-similarity snapshot (→ `possessed`).": [
+      {
+        "executionId": "c4d7517e-1191-4dc0-b426-8a94cc6d70a2",
+        "chatSessionId": "sess_866ff226-1295-4842-aca2-3d1631f5c2e3",
+        "timestamp": 1794856779066
+      },
+      {
+        "executionId": "d7ab9d70-c23b-4ff4-9b12-9e9f5e3b02ff",
+        "chatSessionId": "sess_8d78ae8d-4b9e-4da3-9ce6-0cc50896ade6",
+        "timestamp": 1794863307000
+      },
+      {
+        "executionId": "32dc892f-b3f7-46bd-9429-87d81aac627e",
+        "chatSessionId": "sess_e72fc9f8-796b-436a-a688-fd774785d218",
+        "timestamp": 1794991315536
+      },
+      {
+        "executionId": "32dc892f-b3f7-46bd-9429-87d81aac627e",
+        "chatSessionId": "sess_e72fc9f8-796b-436a-a688-fd774785d218",
+        "timestamp": 1794991502643
+      }
+    ],
+    "7. Checkpoint — core and network complete": [
+      {
+        "executionId": "c4d7517e-1191-4dc0-b426-8a94cc6d70a2",
+        "chatSessionId": "sess_866ff226-1295-4842-aca2-3d1631f5c2e3",
+        "timestamp": 1794856779108
+      },
+      {
+        "executionId": "d7ab9d70-c23b-4ff4-9b12-9e9f5e3b02ff",
+        "chatSessionId": "sess_8d78ae8d-4b9e-4da3-9ce6-0cc50896ade6",
+        "timestamp": 1794863307048
+      }
+    ],
+    "8.1 Create the Hono application in `src/worker/index.ts`. Register `POST /api/scan`: accept `{ urls: string[] }` (at most 3); enforce the 1 MB body limit in code (do not rely on runtime defaults); call `guard` on each URL; run the pool-of-3 fetcher calls; return `{ judgements: Judgement[] }` as JSON. For the `possessed` check, apply `similarity` to the first 64 KB of visible text. Return `{ error: string }` with 4xx on invalid input; never expose stack traces.": [
+      {
+        "executionId": "c4d7517e-1191-4dc0-b426-8a94cc6d70a2",
+        "chatSessionId": "sess_866ff226-1295-4842-aca2-3d1631f5c2e3",
+        "timestamp": 1794856779159
+      },
+      {
+        "executionId": "d7ab9d70-c23b-4ff4-9b12-9e9f5e3b02ff",
+        "chatSessionId": "sess_8d78ae8d-4b9e-4da3-9ce6-0cc50896ade6",
+        "timestamp": 1794863307101
+      },
+      {
+        "executionId": "32dc892f-b3f7-46bd-9429-87d81aac627e",
+        "chatSessionId": "sess_e72fc9f8-796b-436a-a688-fd774785d218",
+        "timestamp": 1794991318633
+      },
+      {
+        "executionId": "32dc892f-b3f7-46bd-9429-87d81aac627e",
+        "chatSessionId": "sess_e72fc9f8-796b-436a-a688-fd774785d218",
+        "timestamp": 1794991507064
+      }
+    ],
+    "8.2 Register `POST /api/resolve` in `src/worker/index.ts`: accept `{ input: string, kind: 'url' | 'repo' }`; fetch the input page or GitHub README; detect content type; return `{ source: string, kind: 'markdown' | 'html' }` or `{ error: string }` with 422 when unresolvable.": [
+      {
+        "executionId": "c4d7517e-1191-4dc0-b426-8a94cc6d70a2",
+        "chatSessionId": "sess_866ff226-1295-4842-aca2-3d1631f5c2e3",
+        "timestamp": 1794856779202
+      },
+      {
+        "executionId": "d7ab9d70-c23b-4ff4-9b12-9e9f5e3b02ff",
+        "chatSessionId": "sess_8d78ae8d-4b9e-4da3-9ce6-0cc50896ade6",
+        "timestamp": 1794863307157
+      },
+      {
+        "executionId": "32dc892f-b3f7-46bd-9429-87d81aac627e",
+        "chatSessionId": "sess_e72fc9f8-796b-436a-a688-fd774785d218",
+        "timestamp": 1794991509764
+      },
+      {
+        "executionId": "32dc892f-b3f7-46bd-9429-87d81aac627e",
+        "chatSessionId": "sess_e72fc9f8-796b-436a-a688-fd774785d218",
+        "timestamp": 1794991675561
+      }
+    ],
+    "8.3 Configure `wrangler.toml` with `[assets]` pointing to the Vite build output (`dist/`) and a build command that runs both the Vite build and the Worker bundle. Ensure no legacy `[site]` bucket is present.": [
+      {
+        "executionId": "c4d7517e-1191-4dc0-b426-8a94cc6d70a2",
+        "chatSessionId": "sess_866ff226-1295-4842-aca2-3d1631f5c2e3",
+        "timestamp": 1794856779245
+      },
+      {
+        "executionId": "d7ab9d70-c23b-4ff4-9b12-9e9f5e3b02ff",
+        "chatSessionId": "sess_8d78ae8d-4b9e-4da3-9ce6-0cc50896ade6",
+        "timestamp": 1794863307207
+      },
+      {
+        "executionId": "32dc892f-b3f7-46bd-9429-87d81aac627e",
+        "chatSessionId": "sess_e72fc9f8-796b-436a-a688-fd774785d218",
+        "timestamp": 1794991515037
+      },
+      {
+        "executionId": "32dc892f-b3f7-46bd-9429-87d81aac627e",
+        "chatSessionId": "sess_e72fc9f8-796b-436a-a688-fd774785d218",
+        "timestamp": 1794991678301
+      }
+    ],
+    "9.1 Create the page shell in `web/index.html` and `web/graveyard.ts`: input area for pasting text, URL, or `owner/repo`; sample-document button; apply palette and type from `.kiro/steering/costume.md` (ink `#0b0d12`, slate `#1c2230`, bone `#e8e2d0`, amber `#f2a541`, ectoplasm `#7dffb0`; one carved display face for headings; system sans for body; `tsconfig.web.json` with `DOM` lib).": [
+      {
+        "executionId": "c4d7517e-1191-4dc0-b426-8a94cc6d70a2",
+        "chatSessionId": "sess_866ff226-1295-4842-aca2-3d1631f5c2e3",
+        "timestamp": 1794856779289
+      },
+      {
+        "executionId": "d7ab9d70-c23b-4ff4-9b12-9e9f5e3b02ff",
+        "chatSessionId": "sess_8d78ae8d-4b9e-4da3-9ce6-0cc50896ade6",
+        "timestamp": 1794863307268
+      },
+      {
+        "executionId": "32dc892f-b3f7-46bd-9429-87d81aac627e",
+        "chatSessionId": "sess_e72fc9f8-796b-436a-a688-fd774785d218",
+        "timestamp": 1794991517552
+      },
+      {
+        "executionId": "32dc892f-b3f7-46bd-9429-87d81aac627e",
+        "chatSessionId": "sess_e72fc9f8-796b-436a-a688-fd774785d218",
+        "timestamp": 1794991682671
+      }
+    ],
+    "9.2 Implement extraction and batching in `web/graveyard.ts`: bundle `extract` from core (Vite tree-shakes the rest); for page-URL or repo inputs first call `POST /api/resolve`; apply the 200-link cap in the browser; send at most 3 URLs per `POST /api/scan`, at most 2 requests in flight; append returned `Judgement` objects to the state array; call both the scene and ledger render functions on each update.": [
+      {
+        "executionId": "c4d7517e-1191-4dc0-b426-8a94cc6d70a2",
+        "chatSessionId": "sess_866ff226-1295-4842-aca2-3d1631f5c2e3",
+        "timestamp": 1794856779330
+      },
+      {
+        "executionId": "d7ab9d70-c23b-4ff4-9b12-9e9f5e3b02ff",
+        "chatSessionId": "sess_8d78ae8d-4b9e-4da3-9ce6-0cc50896ade6",
+        "timestamp": 1794863307316
+      },
+      {
+        "executionId": "32dc892f-b3f7-46bd-9429-87d81aac627e",
+        "chatSessionId": "sess_e72fc9f8-796b-436a-a688-fd774785d218",
+        "timestamp": 1794991685687
+      },
+      {
+        "executionId": "32dc892f-b3f7-46bd-9429-87d81aac627e",
+        "chatSessionId": "sess_e72fc9f8-796b-436a-a688-fd774785d218",
+        "timestamp": 1794991814164
+      }
+    ],
+    "9.3 Implement the SVG scene in `web/scene.ts`: one element per judgement in document order. Shapes: lit window (amber `#f2a541`) for `alive`, crumbling tombstone for `dead`, zombie hand with green glow (`#7dffb0`) for `possessed`, fog patch for `restless`. Each shape carries a visible text label (colour is not the only signal). Tombstone and zombie-hand height: `clamp(lifespanYears * 12, 40, 220)` px where `lifespanYears` = whole-year difference between `epitaph.first` and `epitaph.last`; use 40 px minimum when no Epitaph. `possessed` links display their Epitaph on the zombie-hand element. Moon advances one step per returned batch. Motion: 400–900 ms ease-out, nothing bounces.": [
+      {
+        "executionId": "c4d7517e-1191-4dc0-b426-8a94cc6d70a2",
+        "chatSessionId": "sess_866ff226-1295-4842-aca2-3d1631f5c2e3",
+        "timestamp": 1794856779372
+      },
+      {
+        "executionId": "d7ab9d70-c23b-4ff4-9b12-9e9f5e3b02ff",
+        "chatSessionId": "sess_8d78ae8d-4b9e-4da3-9ce6-0cc50896ade6",
+        "timestamp": 1794863307402
+      },
+      {
+        "executionId": "32dc892f-b3f7-46bd-9429-87d81aac627e",
+        "chatSessionId": "sess_e72fc9f8-796b-436a-a688-fd774785d218",
+        "timestamp": 1794991688434
+      },
+      {
+        "executionId": "32dc892f-b3f7-46bd-9429-87d81aac627e",
+        "chatSessionId": "sess_e72fc9f8-796b-436a-a688-fd774785d218",
+        "timestamp": 1794991817130
+      }
+    ],
+    "9.4 Write a property test for the tombstone height formula in `test/scene.prop.test.ts` using `arbLifespan()`.": [
+      {
+        "executionId": "c4d7517e-1191-4dc0-b426-8a94cc6d70a2",
+        "chatSessionId": "sess_866ff226-1295-4842-aca2-3d1631f5c2e3",
+        "timestamp": 1794856779413
+      },
+      {
+        "executionId": "d7ab9d70-c23b-4ff4-9b12-9e9f5e3b02ff",
+        "chatSessionId": "sess_8d78ae8d-4b9e-4da3-9ce6-0cc50896ade6",
+        "timestamp": 1794863307449
+      },
+      {
+        "executionId": "32dc892f-b3f7-46bd-9429-87d81aac627e",
+        "chatSessionId": "sess_e72fc9f8-796b-436a-a688-fd774785d218",
+        "timestamp": 1794991819753
+      },
+      {
+        "executionId": "32dc892f-b3f7-46bd-9429-87d81aac627e",
+        "chatSessionId": "sess_e72fc9f8-796b-436a-a688-fd774785d218",
+        "timestamp": 1794991954143
+      }
+    ],
+    "9.5 Implement the Resurrect action and ledger in `web/graveyard.ts`: ledger table with one row per link (URL, verdict label, reason, Resurrection URL linked, exclude checkbox); \"download patched document\" button calls `patch()` from core bundled by Vite and downloads via Blob URL. For `dead` and `possessed` links, expose a Resurrect button that opens `judgement.resurrection` in a new tab; if `resurrection` is absent, disable the button and label it \"No archived version available\".": [
+      {
+        "executionId": "c4d7517e-1191-4dc0-b426-8a94cc6d70a2",
+        "chatSessionId": "sess_866ff226-1295-4842-aca2-3d1631f5c2e3",
+        "timestamp": 1794856779455
+      },
+      {
+        "executionId": "d7ab9d70-c23b-4ff4-9b12-9e9f5e3b02ff",
+        "chatSessionId": "sess_8d78ae8d-4b9e-4da3-9ce6-0cc50896ade6",
+        "timestamp": 1794863307497
+      },
+      {
+        "executionId": "32dc892f-b3f7-46bd-9429-87d81aac627e",
+        "chatSessionId": "sess_e72fc9f8-796b-436a-a688-fd774785d218",
+        "timestamp": 1794991822324
+      },
+      {
+        "executionId": "32dc892f-b3f7-46bd-9429-87d81aac627e",
+        "chatSessionId": "sess_e72fc9f8-796b-436a-a688-fd774785d218",
+        "timestamp": 1794991956889
+      }
+    ],
+    "9.6 Accessibility pass in `web/graveyard.ts` and `web/scene.ts`: every interactive control reachable by keyboard alone with visible focus indicator; results container uses one `aria-live=\"polite\"` region with batched announcements; `@media (prefers-reduced-motion: reduce)` suppresses all animations; colour contrast bone on ink ≥ 4.5:1; sound off by default with a visible toggle.": [
+      {
+        "executionId": "c4d7517e-1191-4dc0-b426-8a94cc6d70a2",
+        "chatSessionId": "sess_866ff226-1295-4842-aca2-3d1631f5c2e3",
+        "timestamp": 1794856779510
+      },
+      {
+        "executionId": "d7ab9d70-c23b-4ff4-9b12-9e9f5e3b02ff",
+        "chatSessionId": "sess_8d78ae8d-4b9e-4da3-9ce6-0cc50896ade6",
+        "timestamp": 1794863307542
+      },
+      {
+        "executionId": "32dc892f-b3f7-46bd-9429-87d81aac627e",
+        "chatSessionId": "sess_e72fc9f8-796b-436a-a688-fd774785d218",
+        "timestamp": 1794991959749
+      },
+      {
+        "executionId": "32dc892f-b3f7-46bd-9429-87d81aac627e",
+        "chatSessionId": "sess_e72fc9f8-796b-436a-a688-fd774785d218",
+        "timestamp": 1794992103664
+      }
+    ],
+    "10.1 Implement CLI entry in `src/cli/index.ts`. Parse `revenant <file|url> [--fix] [--json]`. Infer kind from argument (file → read + infer; `http(s)://` → `'url'`; `owner/repo` pattern → `'repo'`). Run `scan` with default `fetcher` and default `wayback`. Collect all `Judgement` objects from `ScanEvent` stream. Default: one line per non-`alive` link (URL, verdict, reason, resurrection or `—`); no output if all alive. Exit 1 if any `dead` or `possessed`; exit 0 otherwise.": [
+      {
+        "executionId": "c4d7517e-1191-4dc0-b426-8a94cc6d70a2",
+        "chatSessionId": "sess_866ff226-1295-4842-aca2-3d1631f5c2e3",
+        "timestamp": 1794856779554
+      },
+      {
+        "executionId": "d7ab9d70-c23b-4ff4-9b12-9e9f5e3b02ff",
+        "chatSessionId": "sess_8d78ae8d-4b9e-4da3-9ce6-0cc50896ade6",
+        "timestamp": 1794863307590
+      },
+      {
+        "executionId": "32dc892f-b3f7-46bd-9429-87d81aac627e",
+        "chatSessionId": "sess_e72fc9f8-796b-436a-a688-fd774785d218",
+        "timestamp": 1794991962633
+      },
+      {
+        "executionId": "32dc892f-b3f7-46bd-9429-87d81aac627e",
+        "chatSessionId": "sess_e72fc9f8-796b-436a-a688-fd774785d218",
+        "timestamp": 1794992108580
+      }
+    ],
+    "10.2 Add `--fix`: when input is a file path, overwrite in place with `patch()` output for `dead` and `possessed` links. When input is a URL: print error to stderr (JSON structure when `--json` also set) and exit 2.": [
+      {
+        "executionId": "c4d7517e-1191-4dc0-b426-8a94cc6d70a2",
+        "chatSessionId": "sess_866ff226-1295-4842-aca2-3d1631f5c2e3",
+        "timestamp": 1794856779597
+      },
+      {
+        "executionId": "d7ab9d70-c23b-4ff4-9b12-9e9f5e3b02ff",
+        "chatSessionId": "sess_8d78ae8d-4b9e-4da3-9ce6-0cc50896ade6",
+        "timestamp": 1794863307635
+      },
+      {
+        "executionId": "32dc892f-b3f7-46bd-9429-87d81aac627e",
+        "chatSessionId": "sess_e72fc9f8-796b-436a-a688-fd774785d218",
+        "timestamp": 1794992111220
+      },
+      {
+        "executionId": "32dc892f-b3f7-46bd-9429-87d81aac627e",
+        "chatSessionId": "sess_e72fc9f8-796b-436a-a688-fd774785d218",
+        "timestamp": 1794992220466
+      }
+    ],
+    "10.3 Add `--json`: print single `CliOutput` JSON to stdout; suppress per-line format.": [
+      {
+        "executionId": "c4d7517e-1191-4dc0-b426-8a94cc6d70a2",
+        "chatSessionId": "sess_866ff226-1295-4842-aca2-3d1631f5c2e3",
+        "timestamp": 1794856779643
+      },
+      {
+        "executionId": "d7ab9d70-c23b-4ff4-9b12-9e9f5e3b02ff",
+        "chatSessionId": "sess_8d78ae8d-4b9e-4da3-9ce6-0cc50896ade6",
+        "timestamp": 1794863307687
+      },
+      {
+        "executionId": "32dc892f-b3f7-46bd-9429-87d81aac627e",
+        "chatSessionId": "sess_e72fc9f8-796b-436a-a688-fd774785d218",
+        "timestamp": 1794992113447
+      },
+      {
+        "executionId": "32dc892f-b3f7-46bd-9429-87d81aac627e",
+        "chatSessionId": "sess_e72fc9f8-796b-436a-a688-fd774785d218",
+        "timestamp": 1794992223041
+      }
+    ],
+    "10.4 Add `\"bin\": { \"revenant\": \"./dist/cli/index.js\" }` to `package.json` and add an esbuild (or Vite) build step producing the CLI bundle targeting Node.js.": [
+      {
+        "executionId": "c4d7517e-1191-4dc0-b426-8a94cc6d70a2",
+        "chatSessionId": "sess_866ff226-1295-4842-aca2-3d1631f5c2e3",
+        "timestamp": 1794856779688
+      },
+      {
+        "executionId": "d7ab9d70-c23b-4ff4-9b12-9e9f5e3b02ff",
+        "chatSessionId": "sess_8d78ae8d-4b9e-4da3-9ce6-0cc50896ade6",
+        "timestamp": 1794863307733
+      },
+      {
+        "executionId": "32dc892f-b3f7-46bd-9429-87d81aac627e",
+        "chatSessionId": "sess_e72fc9f8-796b-436a-a688-fd774785d218",
+        "timestamp": 1794992225561
+      },
+      {
+        "executionId": "32dc892f-b3f7-46bd-9429-87d81aac627e",
+        "chatSessionId": "sess_e72fc9f8-796b-436a-a688-fd774785d218",
+        "timestamp": 1794992616704
+      }
+    ],
+    "10.5 Write CLI tests in `test/cli.int.test.ts` using a temporary file and a fake `Fetcher` shim: default output with mixed verdicts including `possessed`; no output when all alive (exit 0); exit 1 on `dead`/`possessed`; `--fix` rewrites file (replaces both `dead` and `possessed` links); `--fix` on URL → error + exit 2; `--json` output shape; `--fix --json` on URL → JSON error.": [
+      {
+        "executionId": "c4d7517e-1191-4dc0-b426-8a94cc6d70a2",
+        "chatSessionId": "sess_866ff226-1295-4842-aca2-3d1631f5c2e3",
+        "timestamp": 1794856779734
+      },
+      {
+        "executionId": "d7ab9d70-c23b-4ff4-9b12-9e9f5e3b02ff",
+        "chatSessionId": "sess_8d78ae8d-4b9e-4da3-9ce6-0cc50896ade6",
+        "timestamp": 1794863307779
+      },
+      {
+        "executionId": "32dc892f-b3f7-46bd-9429-87d81aac627e",
+        "chatSessionId": "sess_e72fc9f8-796b-436a-a688-fd774785d218",
+        "timestamp": 1794992228144
+      },
+      {
+        "executionId": "32dc892f-b3f7-46bd-9429-87d81aac627e",
+        "chatSessionId": "sess_e72fc9f8-796b-436a-a688-fd774785d218",
+        "timestamp": 1794992616793
+      }
+    ],
+    "11. Checkpoint — all surfaces wired": [
+      {
+        "executionId": "c4d7517e-1191-4dc0-b426-8a94cc6d70a2",
+        "chatSessionId": "sess_866ff226-1295-4842-aca2-3d1631f5c2e3",
+        "timestamp": 1794856779776
+      },
+      {
+        "executionId": "d7ab9d70-c23b-4ff4-9b12-9e9f5e3b02ff",
+        "chatSessionId": "sess_8d78ae8d-4b9e-4da3-9ce6-0cc50896ade6",
+        "timestamp": 1794863307828
+      }
+    ],
+    "12.1 Implement the stdio MCP server in `src/mcp/index.ts` using `@modelcontextprotocol/sdk`. Register two tools:": [
+      {
+        "executionId": "c4d7517e-1191-4dc0-b426-8a94cc6d70a2",
+        "chatSessionId": "sess_866ff226-1295-4842-aca2-3d1631f5c2e3",
+        "timestamp": 1794856779823
+      },
+      {
+        "executionId": "d7ab9d70-c23b-4ff4-9b12-9e9f5e3b02ff",
+        "chatSessionId": "sess_8d78ae8d-4b9e-4da3-9ce6-0cc50896ade6",
+        "timestamp": 1794863307877
+      },
+      {
+        "executionId": "32dc892f-b3f7-46bd-9429-87d81aac627e",
+        "chatSessionId": "sess_e72fc9f8-796b-436a-a688-fd774785d218",
+        "timestamp": 1794992628660
+      },
+      {
+        "executionId": "32dc892f-b3f7-46bd-9429-87d81aac627e",
+        "chatSessionId": "sess_e72fc9f8-796b-436a-a688-fd774785d218",
+        "timestamp": 1794992706793
+      }
+    ],
+    "12.2 Write MCP server tests in `test/mcp.int.test.ts` using fake `Fetcher` and fake `Wayback`: `check_links` with text, with URL list, with empty input (MCP error); `resurrect` for all four snapshot/reachability states.": [
+      {
+        "executionId": "c4d7517e-1191-4dc0-b426-8a94cc6d70a2",
+        "chatSessionId": "sess_866ff226-1295-4842-aca2-3d1631f5c2e3",
+        "timestamp": 1794856779869
+      },
+      {
+        "executionId": "d7ab9d70-c23b-4ff4-9b12-9e9f5e3b02ff",
+        "chatSessionId": "sess_8d78ae8d-4b9e-4da3-9ce6-0cc50896ade6",
+        "timestamp": 1794863307924
+      },
+      {
+        "executionId": "32dc892f-b3f7-46bd-9429-87d81aac627e",
+        "chatSessionId": "sess_e72fc9f8-796b-436a-a688-fd774785d218",
+        "timestamp": 1794992709435
+      },
+      {
+        "executionId": "32dc892f-b3f7-46bd-9429-87d81aac627e",
+        "chatSessionId": "sess_e72fc9f8-796b-436a-a688-fd774785d218",
+        "timestamp": 1794992769493
+      }
+    ],
+    "12.3 Add an esbuild build step for `src/mcp/index.ts` targeting Node.js and register the server in `.kiro/settings/mcp.json` with `\"command\": \"node\"` and `\"args\": [\"./dist/mcp/index.js\"]`.": [
+      {
+        "executionId": "c4d7517e-1191-4dc0-b426-8a94cc6d70a2",
+        "chatSessionId": "sess_866ff226-1295-4842-aca2-3d1631f5c2e3",
+        "timestamp": 1794856779912
+      },
+      {
+        "executionId": "d7ab9d70-c23b-4ff4-9b12-9e9f5e3b02ff",
+        "chatSessionId": "sess_8d78ae8d-4b9e-4da3-9ce6-0cc50896ade6",
+        "timestamp": 1794863307970
+      },
+      {
+        "executionId": "32dc892f-b3f7-46bd-9429-87d81aac627e",
+        "chatSessionId": "sess_e72fc9f8-796b-436a-a688-fd774785d218",
+        "timestamp": 1794992710127
+      }
+    ],
+    "13.1 Deploy to Cloudflare Workers using `npm run deploy`. Verify the Worker URL is live and the Graveyard page loads.": [
+      {
+        "executionId": "c4d7517e-1191-4dc0-b426-8a94cc6d70a2",
+        "chatSessionId": "sess_866ff226-1295-4842-aca2-3d1631f5c2e3",
+        "timestamp": 1794856779957
+      },
+      {
+        "executionId": "d7ab9d70-c23b-4ff4-9b12-9e9f5e3b02ff",
+        "chatSessionId": "sess_8d78ae8d-4b9e-4da3-9ce6-0cc50896ade6",
+        "timestamp": 1794863308015
+      }
+    ],
+    "13.2 Run the sample document on the live Worker and confirm at least one result for each of the four verdicts (`alive`, `dead`, `possessed`, `restless`). Update the sample document if any verdict is missing.": [
+      {
+        "executionId": "c4d7517e-1191-4dc0-b426-8a94cc6d70a2",
+        "chatSessionId": "sess_866ff226-1295-4842-aca2-3d1631f5c2e3",
+        "timestamp": 1794856780002
+      },
+      {
+        "executionId": "d7ab9d70-c23b-4ff4-9b12-9e9f5e3b02ff",
+        "chatSessionId": "sess_8d78ae8d-4b9e-4da3-9ce6-0cc50896ade6",
+        "timestamp": 1794863308060
+      }
+    ],
+    "13.3 Write `README.md`: one-paragraph description, Graveyard screenshots showing all four verdicts, CLI usage examples (`revenant`, `--fix`, `--json`), MCP configuration instructions, local development instructions (`npm run dev`, `npm test`).": [
+      {
+        "executionId": "c4d7517e-1191-4dc0-b426-8a94cc6d70a2",
+        "chatSessionId": "sess_866ff226-1295-4842-aca2-3d1631f5c2e3",
+        "timestamp": 1794856780052
+      },
+      {
+        "executionId": "d7ab9d70-c23b-4ff4-9b12-9e9f5e3b02ff",
+        "chatSessionId": "sess_8d78ae8d-4b9e-4da3-9ce6-0cc50896ade6",
+        "timestamp": 1794863308106
+      }
+    ],
+    "2. Core types and URL guard": [
+      {
+        "executionId": "d7ab9d70-c23b-4ff4-9b12-9e9f5e3b02ff",
+        "chatSessionId": "sess_8d78ae8d-4b9e-4da3-9ce6-0cc50896ade6",
+        "timestamp": 1794863461204
+      }
+    ],
+    "3. Link extraction": [
+      {
+        "executionId": "32dc892f-b3f7-46bd-9429-87d81aac627e",
+        "chatSessionId": "sess_e72fc9f8-796b-436a-a688-fd774785d218",
+        "timestamp": 1794990919962
+      }
+    ],
+    "4. Similarity, visible text, and verdict classification": [
+      {
+        "executionId": "32dc892f-b3f7-46bd-9429-87d81aac627e",
+        "chatSessionId": "sess_e72fc9f8-796b-436a-a688-fd774785d218",
+        "timestamp": 1794991083383
+      }
+    ],
+    "5. Document patching": [
+      {
+        "executionId": "32dc892f-b3f7-46bd-9429-87d81aac627e",
+        "chatSessionId": "sess_e72fc9f8-796b-436a-a688-fd774785d218",
+        "timestamp": 1794991198006
+      }
+    ],
+    "6. Network layer: fetcher, Wayback client, and scan orchestrator": [
+      {
+        "executionId": "32dc892f-b3f7-46bd-9429-87d81aac627e",
+        "chatSessionId": "sess_e72fc9f8-796b-436a-a688-fd774785d218",
+        "timestamp": 1794991502689
+      }
+    ],
+    "8. Worker HTTP API": [
+      {
+        "executionId": "32dc892f-b3f7-46bd-9429-87d81aac627e",
+        "chatSessionId": "sess_e72fc9f8-796b-436a-a688-fd774785d218",
+        "timestamp": 1794991678348
+      }
+    ],
+    "9. Graveyard UI": [
+      {
+        "executionId": "32dc892f-b3f7-46bd-9429-87d81aac627e",
+        "chatSessionId": "sess_e72fc9f8-796b-436a-a688-fd774785d218",
+        "timestamp": 1794992103754
+      }
+    ],
+    "10. CLI": [
+      {
+        "executionId": "32dc892f-b3f7-46bd-9429-87d81aac627e",
+        "chatSessionId": "sess_e72fc9f8-796b-436a-a688-fd774785d218",
+        "timestamp": 1794992616854
+      }
+    ]
+  }
+}

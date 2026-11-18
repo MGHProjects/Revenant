@@ -1,0 +1,17 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "lib": ["ES2022", "DOM"],
+    "rootDir": ".",
+    "outDir": "./dist/web",
+    "types": [],
+    "paths": {
+      "#core": ["./src/core/index.ts"],
+      "#core/*": ["./src/core/*"],
+      "#net": ["./src/net/index.ts"],
+      "#net/*": ["./src/net/*"]
+    }
+  },
+  "include": ["web/**/*", "src/core/types.ts"],
+  "exclude": ["node_modules", "dist"]
+}
