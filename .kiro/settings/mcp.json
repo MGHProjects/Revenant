@@ -1,0 +1,8 @@
+{
+  "mcpServers": {
+    "revenant": {
+      "command": "node",
+      "args": ["./dist/mcp/index.js"]
+    }
+  }
+}

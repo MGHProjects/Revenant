@@ -1,0 +1,25 @@
+{
+  "compilerOptions": {
+    "strict": true,
+    "module": "ESNext",
+    "moduleResolution": "Bundler",
+    "target": "ES2022",
+    "lib": ["ES2022"],
+    "outDir": "./dist",
+    "rootDir": "./src",
+    "declaration": true,
+    "declarationMap": true,
+    "sourceMap": true,
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "types": ["@cloudflare/workers-types"],
+    "paths": {
+      "#core": ["./src/core/index.ts"],
+      "#core/*": ["./src/core/*"],
+      "#net": ["./src/net/index.ts"],
+      "#net/*": ["./src/net/*"]
+    }
+  },
+  "include": ["src/**/*", "test/**/*.test.ts", "test/**/*.prop.test.ts", "test/**/*.int.test.ts"],
+  "exclude": ["node_modules", "dist", "web"]
+}

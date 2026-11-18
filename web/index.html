@@ -1,0 +1,136 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Revenant — Link Rot Detector</title>
+  <meta name="description" content="Find dead and possessed links in any document and bring them back from the Internet Archive." />
+  <link rel="stylesheet" href="/styles.css" />
+</head>
+<body>
+  <header class="site-header">
+    <div class="site-header-top">
+      <button type="button" id="sound-toggle" class="btn btn-ghost sound-toggle"
+        aria-pressed="false" title="Sound is off — click to toggle">
+        <span aria-hidden="true">🔇</span>
+        <span class="sound-toggle-label">Sound off</span>
+      </button>
+    </div>
+    <h1 class="site-title">Revenant</h1>
+    <p class="site-tagline">Dead links don't stay dead.</p>
+  </header>
+
+  <main class="main-content">
+    <section class="input-section" aria-labelledby="input-heading">
+      <h2 id="input-heading" class="section-heading">Scan a document</h2>
+
+      <div class="input-group">
+        <label for="url-input" class="input-label">URL or GitHub repo</label>
+        <input
+          type="text"
+          id="url-input"
+          class="url-input"
+          placeholder="https://example.com  or  owner/repo"
+          autocomplete="off"
+          spellcheck="false"
+        />
+      </div>
+
+      <div class="input-divider" aria-hidden="true">
+        <span class="input-divider-label">or paste text below</span>
+      </div>
+
+      <div class="input-group">
+        <label for="text-input" class="input-label">Markdown or HTML</label>
+        <textarea
+          id="text-input"
+          class="text-input"
+          rows="10"
+          placeholder="Paste Markdown or HTML here…"
+          spellcheck="false"
+          aria-describedby="text-input-hint"
+        ></textarea>
+        <span id="text-input-hint" class="input-hint">Links in fenced code blocks are ignored.</span>
+      </div>
+
+      <div class="action-row">
+        <button type="button" id="scan-btn" class="btn btn-primary" disabled>
+          <svg class="btn-icon" aria-hidden="true" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="10" cy="10" r="8" />
+            <path d="M10 2 Q12 10 10 18" />
+            <path d="M2 10 h16" />
+          </svg>
+          Scan
+        </button>
+        <button type="button" id="sample-btn" class="btn btn-secondary">
+          <svg class="btn-icon" aria-hidden="true" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M4 3 h9 l4 4 v12 H4 z" />
+            <path d="M13 3 v4 h4" />
+            <path d="M7 10 h7" />
+            <path d="M7 13 h5" />
+          </svg>
+          Load Sample
+        </button>
+      </div>
+    </section>
+
+    <!-- Progress / scene area -->
+    <section class="scene-section" id="scene-section" aria-label="Graveyard scene" hidden>
+      <div class="moon-container" aria-hidden="true">
+        <svg id="moon" class="moon" viewBox="0 0 60 60" aria-hidden="true">
+          <circle cx="30" cy="30" r="28" class="moon-dark" />
+          <path id="moon-lit" class="moon-lit" d="M30 2 A28 28 0 0 1 30 58 A28 28 0 0 1 30 2 Z" />
+        </svg>
+      </div>
+      <div id="scene" class="scene" role="img" aria-label="Visual graveyard showing link verdicts"></div>
+      <p class="scene-status" id="scene-status" aria-live="polite" aria-atomic="true"></p>
+    </section>
+
+    <!-- Accessible ledger -->
+    <section class="ledger-section" id="ledger-section" hidden aria-labelledby="ledger-heading">
+      <h2 id="ledger-heading" class="section-heading">Results</h2>
+      <div class="ledger-controls">
+        <span id="result-summary" class="result-summary"></span>
+        <button type="button" id="download-btn" class="btn btn-secondary" hidden>
+          <svg class="btn-icon" aria-hidden="true" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M10 3 v10" />
+            <path d="M6 10 l4 4 4-4" />
+            <path d="M3 16 h14" />
+          </svg>
+          Download patched document
+        </button>
+      </div>
+      <div id="ledger" class="ledger-wrapper">
+        <table class="ledger-table" aria-label="Link scan results">
+          <caption class="sr-only">Scan results — one row per link</caption>
+          <thead>
+            <tr>
+              <th scope="col">Verdict</th>
+              <th scope="col">URL</th>
+              <th scope="col">Reason</th>
+              <th scope="col">Epitaph</th>
+              <th scope="col">Resurrection</th>
+              <th scope="col"><span title="Exclude from patch download">Exclude</span></th>
+              <th scope="col">Resurrect</th>
+            </tr>
+          </thead>
+          <tbody id="ledger-body"></tbody>
+        </table>
+      </div>
+    </section>
+  </main>
+
+  <!-- Polite live announcements for screen readers -->
+  <div id="announcements" aria-live="polite" aria-atomic="false" class="sr-only"></div>
+
+  <footer class="site-footer">
+    <p>
+      Powered by the
+      <a href="https://web.archive.org/" target="_blank" rel="noopener noreferrer">Wayback Machine</a>.
+      No data is stored.
+    </p>
+  </footer>
+
+  <script type="module" src="/graveyard.ts"></script>
+</body>
+</html>
