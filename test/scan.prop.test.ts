@@ -56,11 +56,8 @@ function makeFakeFetcher(stats: FetcherStats): Fetcher {
 // ---------------------------------------------------------------------------
 
 const fakeWayback: Wayback = {
-  async getEpitaph(_url: string) {
-    return 'unavailable';
-  },
-  async getResurrection(_url: string) {
-    return undefined;
+  async getArchive(_url: string) {
+    return { epitaph: 'unavailable' as const };
   },
   async getSnapshotText(_url: string) {
     return { status: 'none' };
@@ -119,7 +116,7 @@ describe('Property 10: Concurrency cap invariant', () => {
 
             // Collect all events from the scan generator
             const events = [];
-            for await (const event of scan(source, 'markdown', fetcher, fakeWayback, new Date())) {
+            for await (const event of scan(source, 'markdown', fetcher, fakeWayback)) {
               events.push(event);
             }
 
@@ -183,14 +180,13 @@ describe('Property 9: Deduplication invariant', () => {
 
             // Fake Wayback — not needed for this property.
             const noopWayback: Wayback = {
-              async getEpitaph() { return 'unavailable'; },
-              async getResurrection() { return undefined; },
+              async getArchive() { return { epitaph: 'unavailable' as const }; },
               async getSnapshotText() { return { status: 'none' }; },
             };
 
             // Collect judgements from scan.
             const judgements = [];
-            for await (const event of scan(source, 'markdown', countingFetcher, noopWayback, new Date())) {
+            for await (const event of scan(source, 'markdown', countingFetcher, noopWayback)) {
               if (event.type === 'judgement') {
                 judgements.push(event.judgement);
               }

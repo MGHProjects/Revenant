@@ -9,10 +9,10 @@ The central design principle is a **pure core with thin doors**: all logic lives
 ## Architecture
 
 ```
- web ──batch JSON──▶ worker ─┐
- cli ───────────────────────┼─▶ scan(input, fetcher, wayback, now) ─▶ net ─▶ internet
- mcp ───────────────────────┘            │
-                                         └─▶ core (extract, guard, classify, similarity, patch)
+ web ──batch JSON──▶ worker ──────────────────┐
+ cli ──┐                                         ├─▶ judgeLink(link, deps, options) ─▶ net ─▶ internet
+ mcp ──┴─▶ scan(input, kind, fetcher, wayback, now) ─┘            │
+                                                         └─▶ core (extract, guard, classify, similarity, visible-text, patch)
 ```
 
 **Layers:**
@@ -20,7 +20,7 @@ The central design principle is a **pure core with thin doors**: all logic lives
 | Layer | Location | Responsibility |
 |---|---|---|
 | Core | `src/core/` | Pure functions only: `extract`, `guard`, `similarity`, `classify`, `patch`, `visible-text` |
-| Net | `src/net/` | Stateful I/O: `fetcher`, Wayback client, `scan` async generator |
+| Net | `src/net/` | Stateful I/O: `fetcher`, Wayback client, `judge-link` (the one per-link judgement), `scan` async generator |
 | Worker | `src/worker/` | Cloudflare Worker: `POST /api/scan` (JSON, 3-URL batches), `POST /api/resolve`, static asset serving |
 | Web | `web/` | Vite + vanilla TypeScript: Graveyard UI, extract logic, batch orchestration |
 | CLI | `src/cli/` | Node.js entry point: argument parsing, file I/O, process exit |
@@ -144,7 +144,8 @@ Decision table, evaluated top to bottom; first match wins:
 | `outcome === 'timeout'` | `restless` | `No answer within 8 s. Not judged.` |
 | `outcome === 'network-error'` AND `dnsFailure` (NXDOMAIN confirmed) | `dead` | `The domain no longer resolves.` |
 | `outcome === 'network-error'` (any other) | `restless` | `Connection failed ({text}). Not judged.` (no text: `Connection failed. Not judged.`) |
-| `status` is 401, 403, or 429 | `restless` | `Answers {status} to robots. Not judged.` |
+| `status` is 401 | `restless` | `Answers 401: needs a login. Not judged.` |
+| `status` is 403 or 429 | `restless` | `Answers {status} to robots. Not judged.` |
 | `status` is 404 or 410 | `dead` | `Answers {status}.` |
 | `status` is 5xx (after retry) | `restless` | `Answers {status}, twice. Not judged.` |
 | `status` is 2xx AND `finalUrl` has a **different** registrable domain AND `snapshot` is `text` AND `similarity(probe.text, snapshot.text) < 0.2` | `possessed` | `Redirects to {domain}; {n}% like the archived page.` |
@@ -174,8 +175,8 @@ Links with verdict `alive` or `restless`, `dead` or `possessed` links with no `r
 The concrete network function injected into all doors. The core never imports it.
 
 - **Redirect handling**: follows redirects manually, calling `guard()` on each redirect target before following it. Rejects after 5 redirects with a `network-error` Probe.
-- **DNS confirmation**: one shared helper, `confirmNoDns(host)` in `src/net/dns.ts`, used when `fetch` throws (not on abort) and when any hop answers HTTP 530 (Cloudflare error 1016, which is how Workers report a host that does not resolve). It queries `https://cloudflare-dns.com/dns-query?name={host}&type=A` (`accept: application/dns-json`, 3 s timeout). `Status: 3` confirms. `Status: 0` with no A answer triggers one `type=AAAA` query; `Status: 0` with no AAAA answer confirms (CNAME-only answers count as no record). Anything else (records present, other status, DoH error, timeout, non-2xx) is "not confirmed". It never throws. A confirmed failure yields `Probe { outcome: 'network-error', dnsFailure: true }` (`dead`, "The domain no longer resolves.") and is never retried. An unconfirmed 530 is returned as a normal 5xx response (retry once, then `restless`); if it already used both DoH queries it carries `noRetry` and classifies as `Answers 530. Not judged.`. No DoH query for guard rejections or redirect errors.
-- **Subrequest budget**: worst case per URL is 16. The first attempt may use 6 hops + 1 DoH query (a 530 whose A query found records) and then retry; the retry passes `skipDns` so it makes 6 hops and no DoH, then 3 Wayback calls: 7 + 6 + 3 = 16. A 530 that used 2 DoH queries is not retried (8, no Wayback). A thrown fetch is not retried (6 + 2 + 3 = 11). 3 URLs = 48, under the free-plan limit of 50.
+- **DNS confirmation**: one shared helper, `confirmNoDns(host)` in `src/net/dns.ts`, used when `fetch` throws (not on abort) and when any hop answers HTTP 530 (Cloudflare error 1016, which is how Workers report a host that does not resolve). It queries `https://cloudflare-dns.com/dns-query?name={host}&type=A` (`accept: application/dns-json`, 3 s timeout). `Status: 3` confirms. `Status: 0` with no A answer triggers one `type=AAAA` query; `Status: 0` with no AAAA answer confirms (CNAME-only answers count as no record). Anything else (records present, other status, DoH error, timeout, non-2xx) is "not confirmed". It never throws. A confirmed failure yields `Probe { outcome: 'network-error', dnsFailure: true }` (`dead`, "The domain no longer resolves.") and is never retried. An unconfirmed 530 is returned as a normal 5xx response that carries `noRetry` (any DoH query spent, to keep the subrequest budget) and classifies as `Answers 530. Not judged.`. No DoH query for guard rejections or redirect errors.
+- **Subrequest budget** (free plan: 50 per invocation; every fetch counts, and so do Cache API `match`/`put` calls): worst case per URL is **16** (`PER_URL_WORST_CASE` in `src/net/judge-link.ts`), so 3 URLs = 48. A 5xx twice (6 hops + 6 hops on the retry, which passes `skipDns` and makes no DoH query) followed by a cross-domain 2xx costs 12 + CDX 2 + `id_` 2 = 16, where each Wayback call is 1 plus 1 retry after a 429. A thrown fetch on the 6th hop with a confirmed DNS failure is 6 + 2 DoH + CDX 2 = 10. A 530 on the 6th hop with DoH queries is not retried and skips Wayback (8). Redirect hops and 530/429/non-2xx Wayback bodies are cancelled unread, which also frees the 6 connection slots. The Worker makes no Cache API calls. `test/worker-budget.test.ts` forces each path and counts fetch plus cache calls.
 - **Timeout**: 8-second deadline; returns `Probe { outcome: 'timeout' }` on expiry.
 - **Body size**: reads at most 512 KB. If the body exceeds that limit, reading stops and the truncated body is used as the full response (the request is **not** treated as an error).
 - **5xx retry**: the `scan` orchestrator (not the fetcher) retries once after 2 seconds when the first response is 5xx.
@@ -184,18 +185,17 @@ The concrete network function injected into all doors. The core never imports it
 
 The `Wayback` interface is injected into `scan`, enabling the integration test to fake it without real network calls.
 
-Three Wayback APIs are used:
+The Wayback APIs used (one CDX request per URL):
 
 | Purpose | Endpoint |
 |---|---|
-| Epitaph first snapshot | `https://web.archive.org/cdx/search/cdx?url={u}&output=json&fl=timestamp,statuscode&filter=statuscode:200&limit=1` |
-| Epitaph last snapshot | `https://web.archive.org/cdx/search/cdx?url={u}&output=json&fl=timestamp,statuscode&filter=statuscode:200&limit=-1` |
-| Resurrection URL | Built from CDX last timestamp: `https://web.archive.org/web/{timestamp}/{url}` — no third API call needed |
+| Epitaph and Resurrection | `https://web.archive.org/cdx/search/cdx?url={u}&output=json&fl=timestamp,length&filter=statuscode:200&collapse=timestamp:6` (one 200 capture per month, oldest first, with body length) |
+| Resurrection URL | Built from the chosen capture: `https://web.archive.org/web/{timestamp}/{url}` (no further API call) |
 | Snapshot text for `possessed` check | `https://web.archive.org/web/{timestamp}id_/{url}` |
 
-The Resurrection URL is derived from the CDX "last" timestamp already fetched for the Epitaph, avoiding a separate call to the Availability API.
+The client parses the header row and reads `timestamp` and `length` by column; a `length` of `-` or any non-numeric value is unknown. `chooseLife` in `src/core/lives.ts` (pure) picks the capture range: captures are split into lives wherever more than 12 calendar months (from the yyyymm part) separate consecutive captures; the longest life by span wins (tie: earliest); Epitaph first is its first capture; Epitaph last and the Resurrection are its last capture whose length is at least half the life's median known length, else the life's last capture. This keeps a later domain takeover (a parked or gambling page) out of the epitaph and the resurrection. `getSnapshotText` fetches the `id_` body of the same chosen capture, and MCP `resurrect` without a date uses it too; with a date, MCP keeps the closest-snapshot lookup (Availability API). No separate Availability call is needed for scans.
 
-**Caching**: all Wayback responses are cached for 24 hours. In the Worker the platform Cache API is used; in the CLI and MCP server an in-memory `Map` keyed by URL is used. Cache entry shape:
+**Caching**: all Wayback responses are cached for 24 hours. Every environment uses an in-memory `Map` keyed by URL (in the Worker it lives as long as the isolate). The platform Cache API is not used: its `match`/`put` calls count toward the Worker's 50 subrequests and would push the per-URL worst case past 16. Wayback bodies are read through the shared `readCapped` (`src/net/read-capped.ts`), 512 KB, stream cancelled at the cap, truncated body used as complete. Cache entry shape:
 
 ```ts
 interface WaybackCacheEntry {
@@ -207,7 +207,7 @@ interface WaybackCacheEntry {
 }
 ```
 
-**429 back-off**: wait for the `Retry-After` header value (capped at 10 s), retry once; on second failure set Epitaph to `'unavailable'`. An empty CDX result (`[]` or header row only) sets Epitaph to `'none'`. `'unavailable'` is never cached; `'none'` is cached 24 h. The same holds for `getSnapshotText`: `{ status: 'unavailable' }` (CDX lookup or `id_` body failed) is returned but never stored, in memory or in the platform cache, so a later call asks the archive again; `{ status: 'text' }` and `{ status: 'none' }` are cached 24 h.
+**429 back-off**: wait for the `Retry-After` header value (capped at 10 s), retry once; on second failure set Epitaph to `'unavailable'`. An empty CDX result (`[]` or header row only) sets Epitaph to `'none'`. `'unavailable'` is never cached; `'none'` is cached 24 h. The same holds for `getSnapshotText`: `{ status: 'unavailable' }` (CDX lookup or `id_` body failed) is returned but never stored, in memory, so a later call asks the archive again; `{ status: 'text' }` and `{ status: 'none' }` are cached 24 h.
 
 **Unreachable / timeout**: on connection error, HTTP error response, or no response within 10 s, retain existing verdict and set Epitaph to `'unavailable'`.
 
@@ -217,22 +217,25 @@ interface WaybackCacheEntry {
 type InputKind = 'markdown' | 'html' | 'url' | 'repo';
 ```
 
-Yields `ScanEvent` objects. Used by CLI and MCP only (the Worker uses per-batch calls instead of the full generator).
+Yields `ScanEvent` objects. Used by CLI and MCP only. The Worker calls `judgeLink` directly for each URL of a batch; `scan` does the same for each link in its pool, so every door gives the same verdict for the same link.
 
-The six steps:
+The five steps:
 
 1. **Resolve input**: if `kind` is `'url'`, fetch the page and detect `Content-Type` for effective parse kind. If `kind` is `'repo'`, fetch the default-branch README from the GitHub API as Markdown. On failure or undetectable content type: yield `{ type: 'error', message }` and halt.
 2. **Extract**: call `extract(source, effectiveKind)` → `Link[]`.
 3. **Cap**: if more than 200 distinct URLs, keep the first 200 and emit `{ type: 'meta', total: actualCount, capped: true, capLimit: 200 }`. Otherwise emit `{ type: 'meta', total: actualCount, capped: false, capLimit: 200 }`.
-4. **Guard**: for each `Link`, call `guard(link.url)`. Failing links yield `{ type: 'judgement', judgement: { verdict: 'restless', reason } }` immediately.
-5. **Pool of 6**: process remaining links with a concurrency pool of exactly 6. For each URL:
+4. **Pool of 6**: run `judgeLink` for every link with a concurrency pool of exactly 6. A link rejected by `guard(link.url)` yields `restless` without any request. For each remaining URL `judgeLink` does:
    - `fetcher(url, { timeoutMs: 8000, maxBytes: 524288 })` → `Probe`.
    - If 5xx: wait 2 s and call `fetcher` once more.
    - Only if 2xx AND `finalUrl` has a different registrable domain from `url`: call `wayback.getSnapshotText(url)`.
    - `classify(probe, url, snapshot?)` → `{ verdict, reason }`.
-   - If `dead` or `possessed`: call `wayback.getEpitaph(url)` → Epitaph; build Resurrection from CDX last timestamp.
+   - If `dead` or `possessed`: call `wayback.getEpitaph(url)` → Epitaph; build Resurrection from the chosen capture.
    - Yield `{ type: 'judgement', judgement }`.
-6. **Same-domain alive links** cost zero Wayback calls.
+5. **Same-domain alive links** cost zero Wayback calls.
+
+#### `judgeLink(link, { fetcher, wayback, sleep }, { textCap? })` (`src/net/judge-link.ts`)
+
+The single per-link judgement, and the only place the Worker's subrequest budget refers to. It runs: `guard` → fetch (8 s, 512 KB) → one retry after 2 s with `skipDns` on 5xx (`shouldRetry`) → cross-domain snapshot lookup → `visibleText` of the live body → `classify` → epitaph and resurrection for dead/possessed. Live body and snapshot get the same transformation: visible text, then the optional `textCap` on each side. The Worker passes `textCap: 65536`; CLI and MCP leave it unset. Fetcher, Wayback client and `sleep` are injected, so tests need no real timers.
 
 ### Worker (`src/worker/`)
 
@@ -243,13 +246,14 @@ A Hono application running on the Cloudflare free plan (50 subrequests, 10 ms CP
 - Request body: `{ urls: string[] }` — at most 3 URLs. Body size limit enforced in code (not relying on runtime defaults).
 - Response: `{ judgements: Judgement[] }` as plain JSON.
 - Errors: `{ error: string }` with appropriate 4xx status. Stack traces never exposed.
-- Internally: calls `guard` on each URL, then runs `fetcher` with the pool-of-3 for this request (staying under 50 subrequests). For the `possessed` check, `similarity` is applied to the first 64 KB of visible text.
+- Internally: runs `judgeLink` (guard included) for each URL concurrently with `textCap: 65536`, staying under 50 subrequests. For the `possessed` check, `similarity` is applied to the first 64 KB of visible text.
 
 **`POST /api/resolve`**
 
 - Request body: `{ input: string, kind: 'url' | 'repo' }`.
 - Response: `{ source: string, kind: 'markdown' | 'html' }` — the fetched and content-typed source text.
-- Errors: `{ error: string }` with 422 when input cannot be fetched or content type is undetectable.
+- Errors: `{ error: string }`. 400 for invalid JSON or input. 500 `{ error: "Internal error" }` for unexpected exceptions (never a stack trace; same on `/api/scan`). For `kind: 'url'` the shared `fetcher` is used (guard on every redirect hop, max 5; 8 s timeout covering the body read; 512 KB cap, truncation is not an error). Kind comes from the Content-Type header (`Probe.contentType`) or a body sniff. 422 when the address cannot be loaded: non-2xx (`it answered {status}`), timeout (`no answer within 8 s`), guard rejection (`That address is not allowed: {reason}`, `Probe.blocked`), confirmed DNS failure (`the domain no longer resolves`), or other network error. For `kind: 'repo'`: 404 not found (or no README), 429 GitHub rate limit, 400 invalid `owner/repo`, 502 GitHub unreachable.
+- Repo input uses `resolveRepoReadme(slug, fetchImpl?)` in `src/net/github-readme.ts`, shared with `scan.ts`. It calls `GET https://api.github.com/repos/{owner}/{repo}/readme` (any README file name), decodes `content` as base64 bytes then UTF-8, and falls back to `download_url` (`raw.githubusercontent.com` only) when content is empty. On a rate limit (403 with `x-ratelimit-remaining: 0`, or 429) it falls back to `https://raw.githubusercontent.com/{owner}/{repo}/HEAD/README.md`; if that also fails the result is `rate-limited`. 8 s timeout, 512 KB body cap.
 - Used by the browser before it starts batching, so the browser can run `extract` locally.
 
 Static assets are served from `dist/` (the Vite build output). `wrangler.toml` uses `[assets]` (not the legacy `[site]` bucket).
@@ -315,7 +319,7 @@ stdio MCP server using `@modelcontextprotocol/sdk`. Runs on Node; uses full `sca
 | `'markdown'` | Provided string | `markdown` |
 | `'html'` | Provided string | `html` |
 | `'url'` | Fetched via `POST /api/resolve` (browser) or `scan` (CLI/MCP) | `markdown` or `html`; error if undetectable |
-| `'repo'` | GitHub default-branch README | `markdown` |
+| `'repo'` | GitHub default-branch README via `resolveRepoReadme` | `markdown` (`html` if the README file is `.html`/`.htm`) |
 
 ### Worker API payloads
 
@@ -424,6 +428,17 @@ For any scan over more than 6 URLs (with a fake instrumented `Fetcher`), the num
 For any whole-year lifespan value `y ≥ 0`, `clamp(y * 8, 64, 176)` is in `[64, 176]`, equals 64 for all `y ≤ 8`, increases linearly (`y * 8`) between `y === 8` and `y === 22`, and equals 176 for all `y ≥ 22`.
 
 **Validates: Requirements 6.3**
+
+### Property 12: The chosen life is the longest continuous one
+
+For any non-empty list of captures, `chooseLife` returns a `first` and `last` that both come from the input, with `first ≤ last`, inside one life (no gap over 12 calendar months). That life's span is at least that of every other life, and strictly greater than any earlier life's (ties go to the earliest). `last` is the life's last capture with length at least half the life's median known length, or the life's last capture when none qualifies. Input order does not matter.
+
+**Validates: Requirements 3.1, 3.2**
+
+### Property 13: Yard columns are balanced
+
+For any plot count `n ≥ 1` and any `maxCols ≥ 1`, `cols = balancedColumns(n, maxCols)` satisfies `1 ≤ cols ≤ maxCols` and `cols × ceil(n / cols) ≥ n`. The layout uses the fewest rows possible (`ceil(n / maxCols)`), and the last row is short of `cols` by fewer plots than there are rows, so no plot sits alone under a wide empty row. With at most two rows, the rows differ by at most 1 plot (9 with room for 8 gives 5 + 4). With three or more rows a grid cannot always differ by 1 (13 with room for 6 gives 5 + 5 + 3), so the property states the weaker bound there.
+**Validates: Requirements 6.1, 6.2**
 
 ## Error Handling
 

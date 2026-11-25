@@ -12,7 +12,7 @@ its links rise out of it one by one as the scan streams in.
 
 - **Lit window** (warm amber) = `alive`. **Tombstone** = `dead`. **Zombie hand with green glow** =
   `possessed`. **Fog patch** = `restless`.
-- Tombstone **height** = how long the link lived (first to last good capture).
+- Tombstone **height** = how long the link lived (the longest continuous life in the archive).
   The **epitaph** carved on it is real data: `2009 – 2017 · last seen alive 14 Mar 2017`.
 - The **moon** is the progress indicator: it waxes from new to full as the scan completes.
 - **Resurrect** raises a pale ghost from the grave that becomes the link to the snapshot.

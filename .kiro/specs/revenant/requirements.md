@@ -51,8 +51,8 @@ Revenant is a link-rot checker and document patcher. It scans Markdown, HTML, or
 
 #### Acceptance Criteria
 
-1. WHEN a verdict is `dead` or `possessed`, THE SYSTEM SHALL query the Wayback Machine for the checked URL and return the earliest available Snapshot by archive timestamp and the most recent available Snapshot by archive timestamp as the Epitaph.
-2. IF a Snapshot exists, THEN THE SYSTEM SHALL return its archive URL as the Resurrection.
+1. WHEN a verdict is `dead` or `possessed`, THE SYSTEM SHALL query the Wayback Machine for the checked URL and return the Epitaph of the longest continuous life of the URL in the archive: one Snapshot per month is considered, a gap of more than 12 calendar months starts a new life, the longest life by time span is chosen (the earliest on a tie), the Epitaph first date is that life's first Snapshot, and the Epitaph last date is that life's last Snapshot whose body length is at least half the life's median length (the life's last Snapshot when none qualifies or no length is known).
+2. IF a Snapshot exists, THEN THE SYSTEM SHALL return the archive URL of the Snapshot chosen as the Epitaph last date as the Resurrection.
 3. IF no Snapshot exists, THEN THE SYSTEM SHALL return the Epitaph with a none status, SHALL indicate the link is lost (never archived), and SHALL NOT return any URL as the Resurrection.
 4. IF the Wayback Machine returns a connection error, an HTTP error response, or no response within 10 seconds, THEN THE SYSTEM SHALL retain the existing verdict and return the Epitaph with an unavailable status, SHALL NOT return any URL as the Resurrection, and SHALL indicate that the archive could not be reached and the user can try again. An unavailable status SHALL be distinct from a none status and SHALL NOT be cached for 24 hours.
 

@@ -1,5 +1,5 @@
 /**
- * MCP server integration tests — test/mcp.int.test.ts
+ * MCP server integration tests â€” test/mcp.int.test.ts
  *
  * Handlers are called directly with fake Fetcher and Wayback.
  *
@@ -14,7 +14,7 @@ import {
   handleCheckLinks,
   handleResurrect,
   type McpDeps,
-} from '../src/mcp/index.js';
+} from '../src/mcp/server.js';
 import type { ClosestSnapshot, Fetcher, Probe, Wayback } from '../src/core/types.js';
 
 const URL_ALIVE = 'https://alive.example.com/page';
@@ -31,11 +31,10 @@ function makeWayback(closest?: ClosestSnapshot): Wayback & { calls: Array<[strin
   const calls: Array<[string, string | undefined]> = [];
   return {
     calls,
-    async getEpitaph() {
-      return { first: '2015-01-01', last: '2021-06-15' };
-    },
-    async getResurrection(url: string) {
-      return url === URL_DEAD ? SNAP : undefined;
+    async getArchive(url: string) {
+      return url === URL_DEAD
+        ? { epitaph: { first: '2015-01-01', last: '2021-06-15' }, resurrection: SNAP }
+        : { epitaph: 'none' as const };
     },
     async getSnapshotText() {
       return { status: 'none' };
@@ -114,7 +113,7 @@ describe('check_links', () => {
 });
 
 describe('resurrect', () => {
-  const D = { url: URL_DEAD };
+  const D = { url: URL_DEAD, date: '2021-06-15' };
 
   it('returns the snapshot when found', async () => {
     const r = await handleResurrect(D, deps({ status: 'found', url: SNAP, date: '2021-06-15' }));
@@ -139,35 +138,36 @@ describe('resurrect', () => {
 
   it('reports unknown, not lost, when the fallback path sees an unreachable archive', async () => {
     const wayback: Wayback = {
-      async getEpitaph() {
-        return 'unavailable';
-      },
-      async getResurrection() {
-        return undefined;
+      async getArchive() {
+        return { epitaph: 'unavailable' as const };
       },
       async getSnapshotText() {
         return { status: 'none' };
       },
     };
-    const p = payload(await handleResurrect(D, { fetcher, wayback }));
+    const p = payload(await handleResurrect({ url: URL_DEAD }, { fetcher, wayback }));
     expect(p).toMatchObject({ found: false, lost: false, archiveAvailability: 'unknown' });
     expect(p.snapshotUrl).toBeUndefined();
   });
 
   it('reports lost when the fallback path sees a never-archived URL', async () => {
     const wayback: Wayback = {
-      async getEpitaph() {
-        return 'none';
-      },
-      async getResurrection() {
-        return undefined;
+      async getArchive() {
+        return { epitaph: 'none' as const };
       },
       async getSnapshotText() {
         return { status: 'none' };
       },
     };
-    const p = payload(await handleResurrect(D, { fetcher, wayback }));
+    const p = payload(await handleResurrect({ url: URL_DEAD }, { fetcher, wayback }));
     expect(p).toMatchObject({ found: false, lost: true, archiveAvailability: 'known' });
+  });
+
+  it('without a date uses the chosen capture (getArchive), not the closest lookup', async () => {
+    const wb = makeWayback({ status: 'found', url: 'https://web.archive.org/web/2024/x', date: '2024-01-01' });
+    const p = payload(await handleResurrect({ url: URL_DEAD }, { fetcher, wayback: wb }));
+    expect(p).toMatchObject({ found: true, snapshotUrl: SNAP, snapshotDate: '2021-06-15' });
+    expect(wb.calls).toEqual([]);
   });
 
   it('passes the date to the Wayback lookup', async () => {

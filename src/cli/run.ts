@@ -1,4 +1,3 @@
-#!/usr/bin/env node
 /**
  * Revenant CLI — revenant <file|url> [--fix] [--json]
  *
@@ -9,7 +8,7 @@ import { readFile } from 'node:fs/promises';
 import { existsSync, writeFileSync } from 'node:fs';
 import { archiveNote } from '../core/archive-note.js';
 import { patch } from '../core/patch.js';
-import type { CliOutput, Fetcher, Judgement, ScanEvent, Wayback } from '../core/types.js';
+import type { CliOutput, Fetcher, Judgement, Wayback } from '../core/types.js';
 import { scan } from '../net/scan.js';
 import type { InputKind } from '../net/scan.js';
 import { fetcher as defaultFetcher } from '../net/fetcher.js';
@@ -57,22 +56,45 @@ export interface RunCliResult {
   stderr: string;
 }
 
+/** Output sink. Each call receives one line without its trailing newline. */
+export interface CliIo {
+  out(line: string): void;
+  err(line: string): void;
+}
+
+export function summaryLine(judgements: Judgement[]): string {
+  const count = (v: Judgement['verdict']): number => judgements.filter(j => j.verdict === v).length;
+  const n = judgements.length;
+  return (
+    `${n} ${n === 1 ? 'link' : 'links'}: ${count('alive')} alive, ${count('dead')} dead, ` +
+    `${count('possessed')} possessed, ${count('restless')} restless`
+  );
+}
+
 export async function runCli(
   argv: string[],
   injectedFetcher?: Fetcher,
   injectedWayback?: Wayback,
+  io?: CliIo,
 ): Promise<RunCliResult> {
   let stdoutBuf = '';
   let stderrBuf = '';
 
-  const writeTo = (buf: 'stdout' | 'stderr', text: string): void => {
-    if (buf === 'stdout') {
-      stdoutBuf += text;
-    } else {
-      stderrBuf += text;
-    }
+  const sink: CliIo = {
+    out: line => {
+      stdoutBuf += line + '\n';
+      io?.out(line);
+    },
+    err: line => {
+      stderrBuf += line + '\n';
+      io?.err(line);
+    },
   };
-
+  const writeTo = (buf: 'stdout' | 'stderr', text: string): void => {
+    const line = text.endsWith('\n') ? text.slice(0, -1) : text;
+    if (buf === 'stdout') sink.out(line);
+    else sink.err(line);
+  };
   const fixFlag = argv.includes('--fix');
   const jsonFlag = argv.includes('--json');
   const input = argv.find(a => !a.startsWith('--'));
@@ -107,21 +129,19 @@ export async function runCli(
 
   const fetcher = injectedFetcher ?? defaultFetcher;
   const wayback = injectedWayback ?? createWaybackClient();
-  const events: ScanEvent[] = [];
+  const judgements: Judgement[] = [];
+  const stream = !jsonFlag && !fixFlag;
 
-  for await (const event of scan(source, kind, fetcher, wayback, new Date())) {
-    events.push(event);
-  }
-
-  // Collect judgements from stream.
-  const judgements: Judgement[] = events
-    .filter((e): e is Extract<ScanEvent, { type: 'judgement' }> => e.type === 'judgement')
-    .map(e => e.judgement);
-
-  // Report any scan-level errors to stderr.
-  for (const e of events) {
-    if (e.type === 'error') {
-      writeTo('stderr', `revenant: ${e.message}\n`);
+  for await (const event of scan(source, kind, fetcher, wayback)) {
+    if (event.type === 'judgement') {
+      const j = event.judgement;
+      judgements.push(j);
+      if (stream && j.verdict !== 'alive') {
+        const resurrection = j.resurrection ?? archiveNote(j) ?? '—';
+        writeTo('stdout', `[${j.verdict}] ${j.link.url} — ${j.reason} (${resurrection})\n`);
+      }
+    } else if (event.type === 'error') {
+      writeTo('stderr', `revenant: ${event.message}\n`);
     }
   }
 
@@ -136,9 +156,12 @@ export async function runCli(
   }
 
   if (jsonFlag) {
-    // --json: print single CliOutput JSON to stdout; suppress per-line format.
+    // --json: one document at the end, in document order (first span start).
+    const ordered = [...judgements].sort(
+      (a, b) => (a.link.spans[0]?.start ?? 0) - (b.link.spans[0]?.start ?? 0),
+    );
     const cliOutput: CliOutput = {
-      links: judgements.map(j => ({
+      links: ordered.map(j => ({
         url: j.link.url,
         verdict: j.verdict,
         reason: j.reason,
@@ -148,54 +171,12 @@ export async function runCli(
       })),
     };
     writeTo('stdout', JSON.stringify(cliOutput, null, 2) + '\n');
-  } else if (!fixFlag) {
-    // Default output: one line per non-alive link (skipped when --fix ran).
-    const nonAlive = judgements.filter(j => j.verdict !== 'alive');
-    for (const j of nonAlive) {
-      const resurrection = j.resurrection ?? archiveNote(j) ?? '—';
-      writeTo(
-        'stdout',
-        `[${j.verdict}] ${j.link.url} — ${j.reason} (${resurrection})\n`,
-      );
-    }
   }
 
+  writeTo('stderr', summaryLine(judgements) + '\n');
   // Exit 1 if any dead or possessed; 0 otherwise.
   const hasCritical = judgements.some(
     j => j.verdict === 'dead' || j.verdict === 'possessed',
   );
   return { exitCode: hasCritical ? 1 : 0, stdout: stdoutBuf, stderr: stderrBuf };
-}
-
-// ---------------------------------------------------------------------------
-// CLI entry point (process-bound) — only runs when invoked directly
-// ---------------------------------------------------------------------------
-
-// Guard: only execute when this module is the entry point, not when imported.
-// In Node.js ESM, `process.argv[1]` resolves to the entry file.
-// We use a URL comparison so this doesn't fire during Vitest imports.
-const isEntryPoint = (() => {
-  try {
-    const entryUrl = new URL(`file://${process.argv[1]!.replace(/\\/g, '/')}`).href;
-    const moduleUrl = import.meta.url;
-    return entryUrl === moduleUrl || moduleUrl.endsWith(process.argv[1]!.replace(/\\/g, '/'));
-  } catch {
-    return false;
-  }
-})();
-
-if (isEntryPoint) {
-  async function main(): Promise<void> {
-    const args = process.argv.slice(2);
-    const { exitCode, stdout, stderr } = await runCli(args);
-    if (stdout) process.stdout.write(stdout);
-    if (stderr) process.stderr.write(stderr);
-    process.exit(exitCode);
-  }
-
-  main().catch((err: unknown) => {
-    const message = err instanceof Error ? err.message : String(err);
-    process.stderr.write(`revenant: unexpected error: ${message}\n`);
-    process.exit(1);
-  });
 }

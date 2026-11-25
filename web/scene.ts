@@ -255,7 +255,11 @@ export function showInscription(v: GraveView | undefined): HTMLAnchorElement | u
     a.href = v.snap;
     a.target = '_blank';
     a.rel = 'noopener';
-    action.append(a);
+    const all = el('a', 'btn fade', 'See every capture');
+    all.href = `https://web.archive.org/web/*/${encodeURI(v.url)}`;
+    all.target = '_blank';
+    all.rel = 'noopener';
+    action.append(a, all);
     return a;
   }
   const b = el('button', 'btn go', 'Resurrect');

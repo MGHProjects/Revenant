@@ -1,6 +1,7 @@
+import { USER_AGENT } from './user-agent.js';
+
 const DOH_URL = 'https://cloudflare-dns.com/dns-query';
 const DOH_TIMEOUT_MS = 3_000;
-const USER_AGENT = 'Revenant/1.0';
 
 const TYPE_A = 1;
 const TYPE_AAAA = 28;

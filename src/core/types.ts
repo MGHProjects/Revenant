@@ -20,6 +20,22 @@ export interface Probe {
   dnsFailure?: true;
   /** Set when the fetcher already spent its full DNS budget on a 530; the caller must not retry. */
   noRetry?: true;
+  /** Set when `guard` rejected the initial URL or a redirect hop. `text` holds the reason. */
+  blocked?: true;
+  /** Content-Type header of a `response` outcome, when present. */
+  contentType?: string;
+}
+
+/** One Wayback capture: 14-digit timestamp and body length in bytes (undefined when unknown). */
+export interface Capture {
+  timestamp: string;
+  length: number | undefined;
+}
+
+/** First and last 14-digit timestamps of the longest continuous life of a URL. */
+export interface ChosenLife {
+  first: string;
+  last: string;
 }
 
 /** First and last Wayback Machine capture dates as ISO date strings (YYYY-MM-DD). */
@@ -54,14 +70,27 @@ export type Fetcher = (
   init?: { timeoutMs: number; maxBytes: number; skipDns?: boolean }
 ) => Promise<Probe>;
 
+/** What one CDX request said about a URL. */
+export interface ArchiveAnswer {
+  epitaph: EpitaphResult;
+  resurrection?: string;
+}
+
 /**
  * Injectable Wayback Machine client.
  * Injected into `scan()` so tests can fake it without real network calls.
  */
 export interface Wayback {
-  getEpitaph(url: string): Promise<EpitaphResult>;
-  getResurrection(url: string): Promise<string | undefined>;
-  getSnapshotText(url: string): Promise<SnapshotResult>;
+  /**
+   * One CDX answer yields both the epitaph and the resurrection, or neither.
+   * `resurrection` is present only when `epitaph` holds dates ('none' and 'unavailable' have none).
+   */
+  getArchive(url: string): Promise<ArchiveAnswer>;
+  /**
+   * Visible text of the last good capture. Pass the `archive` answer already fetched in this
+   * judgement so the CDX is not requested a second time.
+   */
+  getSnapshotText(url: string, archive?: ArchiveAnswer): Promise<SnapshotResult>;
   /**
    * Snapshot closest to `date` (YYYY-MM-DD), or the most recent when omitted.
    * Distinguishes "no snapshot" from "archive unreachable". Optional so existing fakes still type-check.

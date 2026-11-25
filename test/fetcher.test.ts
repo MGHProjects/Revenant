@@ -68,7 +68,7 @@ describe('fetcher DNS confirmation', () => {
     expect(p.dnsFailure).toBe(true);
   });
 
-  it('530 + A record present stays a 530 response and may be retried', async () => {
+  it('530 + A record present stays a 530 response and is not retried (subrequest budget)', async () => {
     vi.stubGlobal('fetch', async (input: unknown) => {
       if (String(input).startsWith(DOH)) {
         return new Response(JSON.stringify({ Status: 0, Answer: [{ type: 1, data: '203.0.113.9' }] }));
@@ -78,7 +78,7 @@ describe('fetcher DNS confirmation', () => {
     const p = await fetcher('http://www.dmoz.org/');
     expect(p).toMatchObject({ outcome: 'response', status: 530 });
     expect(p.dnsFailure).toBeUndefined();
-    expect(p.noRetry).toBeUndefined();
+    expect(p.noRetry).toBe(true);
   });
 
   it('530 + DoH failure stays a 530 response', async () => {
@@ -123,5 +123,51 @@ describe('fetcher DNS confirmation', () => {
     expect(p.outcome).toBe('network-error');
     expect(p.dnsFailure).toBeUndefined();
     expect(spy).not.toHaveBeenCalled();
+  });
+});
+
+describe('fetcher releases unread bodies', () => {
+  /** A response with a stream body that records whether it was cancelled. */
+  function tracked(status: number, headers: Record<string, string> = {}) {
+    const state = { cancelled: false };
+    const body = new ReadableStream<Uint8Array>({
+      pull(c) {
+        c.enqueue(new TextEncoder().encode('unread body'));
+      },
+      cancel() {
+        state.cancelled = true;
+      },
+    });
+    return { response: new Response(body, { status, headers }), state };
+  }
+
+  it('cancels the body of every 3xx hop', async () => {
+    const hops: Array<ReturnType<typeof tracked>> = [];
+    vi.stubGlobal('fetch', async (input: unknown) => {
+      const u = String(input);
+      if (u === 'http://a.example.com/') {
+        const h = tracked(301, { Location: 'http://b.example.com/' });
+        hops.push(h);
+        return h.response;
+      }
+      if (u === 'http://b.example.com/') {
+        const h = tracked(302, { Location: 'http://c.example.com/' });
+        hops.push(h);
+        return h.response;
+      }
+      return new Response('done', { status: 200 });
+    });
+    const p = await fetcher('http://a.example.com/');
+    expect(p).toMatchObject({ outcome: 'response', status: 200, text: 'done' });
+    expect(hops).toHaveLength(2);
+    expect(hops.every(h => h.state.cancelled)).toBe(true);
+  });
+
+  it('cancels the 3xx body when giving up on a redirect without Location', async () => {
+    const h = tracked(302);
+    vi.stubGlobal('fetch', async () => h.response);
+    const p = await fetcher('http://a.example.com/');
+    expect(p.outcome).toBe('network-error');
+    expect(h.state.cancelled).toBe(true);
   });
 });

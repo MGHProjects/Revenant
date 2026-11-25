@@ -1,8 +1,7 @@
 /**
  * classify(probe, originalUrl, snapshot?) — maps a network Probe to a verdict.
  *
- * Decision table (first match wins). Reasons are plain sentences in the voice of
- * docs/design/graveyard.html, shared by web, CLI and MCP:
+ * Decision table (first match wins). Reasons are plain sentences shared by web, CLI and MCP:
  *
  * | Condition                                                  | Verdict   | Reason                                                |
  * |------------------------------------------------------------|-----------|-------------------------------------------------------|
@@ -10,9 +9,11 @@
  * | network-error + dnsFailure (NXDOMAIN confirmed)            | dead      | "The domain no longer resolves."                      |
  * | network-error (any other)                                  | restless  | "Connection failed ({text}). Not judged." (no text:   |
  * |                                                            |           | "Connection failed. Not judged.")                     |
- * | status 401, 403, 429                                       | restless  | "Answers {status} to robots. Not judged."             |
+ * | status 401                                                 | restless  | "Answers 401: needs a login. Not judged."             |
+ * | status 403, 429                                            | restless  | "Answers {status} to robots. Not judged."             |
  * | status 404 or 410                                          | dead      | "Answers {status}."                                   |
- * | status 5xx (after retry)                                   | restless  | "Answers {status}, twice. Not judged."                |
+ * | status 5xx (retried)                                       | restless  | "Answers {status}, twice. Not judged."                |
+ * | status 5xx (probe.noRetry)                                 | restless  | "Answers {status}. Not judged."                       |
  * | 2xx + other domain + snapshot + similarity < 0.2           | possessed | "Redirects to {domain}; {n}% like the archived page." |
  * | 2xx + other domain + snapshot + similarity >= 0.2          | alive     | "Answers {status} with the page you cited."           |
  * | 2xx + other domain + snapshot 'unavailable' (archive down) | restless  | "Redirects to {domain}; the archive could not be      |
@@ -63,7 +64,10 @@ export function classify(
   const status = probe.status ?? 0;
 
   // Row 3: 401 / 403 / 429
-  if (status === 401 || status === 403 || status === 429) {
+  if (status === 401) {
+    return { verdict: 'restless', reason: 'Answers 401: needs a login. Not judged.' };
+  }
+  if (status === 403 || status === 429) {
     return { verdict: 'restless', reason: `Answers ${status} to robots. Not judged.` };
   }
 
@@ -102,9 +106,6 @@ export function classify(
       const score = similarity(probe.text ?? '', snapshot.text);
       if (score < 0.2) {
         const pct = Math.round(score * 100);
-        // classify() receives the snapshot body text, not the snapshot URL or its
-        // timestamp. The year label defaults to 'archived' here; the scan orchestrator
-        // (task 6.3) can refine the reason once it has the Epitaph.
         return {
           verdict: 'possessed',
           reason: `Redirects to ${finalDomain}; ${pct}% like the archived page.`,

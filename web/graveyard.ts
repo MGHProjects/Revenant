@@ -21,6 +21,7 @@ import {
   toGraveView,
   type GraveView,
 } from './scene.js';
+import { NARROW_MAX_WIDTH, balancedColumns, maxColumns } from './yard-columns.js';
 
 const LINK_CAP = 200;
 const BATCH_SIZE = 3;
@@ -42,6 +43,7 @@ const scanBtn = $<HTMLButtonElement>('scan');
 const downloadBtn = $<HTMLButtonElement>('download');
 const soundBtn = $<HTMLButtonElement>('sound');
 const rowsEl = $('rows');
+const sampleScanBtn = $<HTMLButtonElement>('scan-sample');
 
 // ---------------------------------------------------------------------------
 // State
@@ -80,7 +82,17 @@ function count(): string {
     .join(', ');
 }
 
+/** Tally, inscription band and the hero's sample button follow whether any plot exists yet. */
+function syncChrome(): void {
+  const has = present().length > 0;
+  $('tally').hidden = !has;
+  $('inscription').hidden = !has;
+  // The sample button only invites a first scan: gone while scanning and once results exist.
+  sampleScanBtn.hidden = scanning || has;
+}
+
 function renderTally(): void {
+  syncChrome();
   const c = tallies();
   for (const k of Object.keys(c) as Verdict[]) $(`n-${k}`).textContent = String(c[k]);
 }
@@ -88,6 +100,31 @@ function renderTally(): void {
 // ---------------------------------------------------------------------------
 // Plots
 // ---------------------------------------------------------------------------
+
+const narrowQuery = window.matchMedia(`(max-width: ${NARROW_MAX_WIDTH}px)`);
+let layoutFrame = 0;
+
+/** Sets --cols from the plot count and the room, and titles host labels that are still clipped. */
+function layoutYard(): void {
+  layoutFrame = 0;
+  const n = yard.childElementCount;
+  const cols = balancedColumns(n, maxColumns(yard.clientWidth, narrowQuery.matches));
+  yard.style.setProperty('--cols', String(cols));
+  for (const b of plotButtons()) {
+    const host = b.querySelector<HTMLElement>('.host');
+    if (!host) continue;
+    if (host.scrollHeight > host.clientHeight + 1) b.title = host.textContent ?? '';
+    else b.removeAttribute('title');
+  }
+}
+
+/** One layout per frame, however many plots or resize events arrive. */
+function scheduleLayout(): void {
+  if (!layoutFrame) layoutFrame = requestAnimationFrame(layoutYard);
+}
+
+new ResizeObserver(scheduleLayout).observe(yard);
+narrowQuery.addEventListener('change', scheduleLayout);
 
 /** Insert at the link's document position, whatever order batches come back in. */
 function addPlot(v: GraveView): void {
@@ -97,6 +134,7 @@ function addPlot(v: GraveView): void {
   const next = plotButtons().find(b => Number(b.dataset['i']) > v.index);
   if (next) yard.insertBefore(li, next.parentElement);
   else yard.append(li);
+  scheduleLayout();
   if (selected < 0) {
     // roving tabindex: the first plot in document order is the tab stop until one is selected
     plotButtons().forEach((b, n) => { b.tabIndex = n === 0 ? 0 : -1; });
@@ -267,6 +305,8 @@ async function resolveAddress(input: string): Promise<{ source: string; kind: Ki
   } catch { /* handled below */ }
   if (!res.ok || typeof body.source !== 'string') {
     const detail = typeof body.error === 'string' ? body.error.replace(/\.$/, '') : `HTTP ${res.status}`;
+    // Worker messages for page URLs are already full sentences. Repo and unknown errors are not.
+    if (/^(Could not load that address|That address is not allowed)/.test(detail)) return { error: `${detail}.` };
     return { error: `Could not load that address: ${detail}.` };
   }
   return { source: body.source, kind: body.kind === 'html' ? 'html' : 'markdown' };
@@ -309,6 +349,7 @@ async function runPool(tasks: Array<() => Promise<void>>, limit: number): Promis
 
 function resetScene(): void {
   yard.replaceChildren();
+  scheduleLayout();
   views = [];
   judgements = [];
   selected = -1;
@@ -322,6 +363,7 @@ function resetScene(): void {
 }
 
 async function scan(): Promise<void> {
+  if (scanning) return;
   scanBtn.disabled = true;
   scanning = true;
   clearError();
@@ -332,7 +374,18 @@ async function scan(): Promise<void> {
     scanning = false;
     scanBtn.disabled = false;
     renderPatchNote();
+    syncChrome();
   }
+}
+
+/** The hero's one-click path: load the bundled sample, clear the address, scan. */
+function scanSample(): void {
+  if (scanning) return;
+  source.value = sample;
+  address.value = '';
+  // the button is about to hide: park focus on the status heading so it is not lost
+  if (document.activeElement === sampleScanBtn) statusEl.focus();
+  void scan();
 }
 
 async function runScan(): Promise<void> {
@@ -454,6 +507,7 @@ function bell(): void {
   g.gain.exponentialRampToValueAtTime(.001, ac.currentTime + 2.5);
   o.connect(g).connect(ac.destination);
   o.start();
+  o.onended = () => { void ac.close(); };
   o.stop(ac.currentTime + 2.5);
 }
 
@@ -472,6 +526,9 @@ $('doc').addEventListener('submit', e => {
   }
   void scan();
 });
+
+sampleScanBtn.addEventListener('click', scanSample);
+if (new URLSearchParams(location.search).get('sample') === '1') scanSample();
 
 $('sample').addEventListener('click', () => {
   source.value = sample;

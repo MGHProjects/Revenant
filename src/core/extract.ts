@@ -131,7 +131,6 @@ function collectReferenceDefinitions(
   let m: RegExpExecArray | null;
   while ((m = re.exec(source)) !== null) {
     const urlStart = m.index + m[0].indexOf(m[2]!);
-    const urlEnd = urlStart + m[2]!.length;
     // Skip if the definition is inside a fenced block
     if (blocked.has(urlStart)) continue;
     const url = stripTitle(m[2]!);
@@ -193,7 +192,6 @@ function scanInlineLinks(source: string, blocked: Set<number>, links: LinkMap): 
   let m: RegExpExecArray | null;
   while ((m = re.exec(source)) !== null) {
     const parenOpen = m.index + 1; // position of `(`
-    const parenClose = m.index + m[0].length - 1; // position of `)`
     const inner = m[1]!;
 
     // Skip if inside fenced block

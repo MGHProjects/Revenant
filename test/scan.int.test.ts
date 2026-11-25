@@ -18,7 +18,7 @@
 import { describe, it, expect } from 'vitest';
 import { scan } from '../src/net/scan.ts';
 import { archiveNote } from '../src/core/archive-note.ts';
-import type { Fetcher, Probe, SnapshotResult, Wayback, Epitaph, Judgement } from '../src/core/types.ts';
+import type { Fetcher, Probe, SnapshotResult, Wayback, ArchiveAnswer, Epitaph, Judgement } from '../src/core/types.ts';
 
 // ---------------------------------------------------------------------------
 // Test URLs — one per scenario
@@ -70,15 +70,11 @@ const LIVE_TEXT_POSSESSED =
   'fresh modern spam advertisement buy now limited offer discount sale promotion';
 
 const fakeWayback: Wayback = {
-  async getEpitaph(_url: string): Promise<Epitaph | 'unavailable'> {
-    return EPITAPH;
-  },
-
-  async getResurrection(url: string): Promise<string | undefined> {
+  async getArchive(url: string): Promise<ArchiveAnswer> {
     if (url === URL_POSSESSED || url === URL_DNS_FAIL || url === URL_NOT_FOUND) {
-      return RESURRECTION_URL;
+      return { epitaph: EPITAPH, resurrection: RESURRECTION_URL };
     }
-    return undefined;
+    return { epitaph: 'none' };
   },
 
   async getSnapshotText(url: string): Promise<SnapshotResult> {
@@ -163,7 +159,7 @@ async function runScan(): Promise<Map<string, Judgement>> {
   callCounts.clear();
 
   const results = new Map<string, Judgement>();
-  for await (const event of scan(DOCUMENT, 'markdown', fakeFetcher, fakeWayback, new Date())) {
+  for await (const event of scan(DOCUMENT, 'markdown', fakeFetcher, fakeWayback)) {
     if (event.type === 'judgement') {
       results.set(event.judgement.link.url, event.judgement);
     }
@@ -319,11 +315,8 @@ describe('scan — never archived vs archive unreachable', () => {
   });
 
   const wayback: Wayback = {
-    async getEpitaph(url: string) {
-      return url === URL_NEVER ? 'none' : 'unavailable';
-    },
-    async getResurrection() {
-      return undefined;
+    async getArchive(url: string) {
+      return { epitaph: url === URL_NEVER ? ('none' as const) : ('unavailable' as const) };
     },
     async getSnapshotText() {
       return { status: 'none' };
@@ -332,7 +325,7 @@ describe('scan — never archived vs archive unreachable', () => {
 
   it('passes both values through and sets distinct notes, with no resurrection', async () => {
     const judgements: Judgement[] = [];
-    for await (const ev of scan(doc, 'markdown', deadFetcher, wayback, new Date(0))) {
+    for await (const ev of scan(doc, 'markdown', deadFetcher, wayback)) {
       if (ev.type === 'judgement') judgements.push(ev.judgement);
     }
     const never = judgements.find(j => j.link.url === URL_NEVER)!;
@@ -365,11 +358,8 @@ describe('scan — cross-domain redirect, archive unreachable vs. no capture', (
     text: 'Microsoft home page',
   });
   const wayback: Wayback = {
-    async getEpitaph() {
-      return 'unavailable';
-    },
-    async getResurrection() {
-      return undefined;
+    async getArchive() {
+      return { epitaph: 'unavailable' as const };
     },
     async getSnapshotText(url: string): Promise<SnapshotResult> {
       return url === URL_CODEPLEX ? { status: 'unavailable' } : { status: 'none' };
@@ -378,7 +368,7 @@ describe('scan — cross-domain redirect, archive unreachable vs. no capture', (
 
   it('archive unreachable → restless; no capture → alive (unchanged)', async () => {
     const judgements: Judgement[] = [];
-    for await (const ev of scan(doc, 'markdown', redirectingFetcher, wayback, new Date(0))) {
+    for await (const ev of scan(doc, 'markdown', redirectingFetcher, wayback)) {
       if (ev.type === 'judgement') judgements.push(ev.judgement);
     }
     const codeplex = judgements.find(j => j.link.url === URL_CODEPLEX)!;

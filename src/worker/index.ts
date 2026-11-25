@@ -5,27 +5,20 @@
  *   POST /api/scan    — accept { urls: string[] } (max 3), return { judgements: Judgement[] }
  *   POST /api/resolve — accept { input: string, kind: 'url' | 'repo' }, return { source, kind }
  *
- * Free-plan constraints (50 subrequests, 10 ms CPU per request):
- *   - max 3 URLs per /api/scan call
- *   - worst case per URL is 16 subrequests (3 URLs = 48): first attempt 6 hops + 1 DoH
- *     query (a 530 whose A query found records), retry 6 hops with no DoH, 3 Wayback calls.
- *     A 530 that used 2 DoH queries is not retried (8, no Wayback); a thrown fetch is 6 + 2 + 3.
- *   - similarity applied to first 64 KB of visible text only
- *   // shortcut: fixed 64 KB cap, raise it if the Worker is moved to the paid plan.
+ * Free-plan constraints (50 subrequests, 10 ms CPU per request): max 3 URLs per /api/scan call,
+ * 64 KB text cap per side. Worst case is 16 subrequests per URL (PER_URL_WORST_CASE), 3 x 16 = 48,
+ * with no Cache API calls (they count toward the 50). The table is in src/net/judge-link.ts.
  *
  * Requirements: 6.1, 5
  */
 
 import { Hono } from 'hono';
-import { guard } from '../core/guard.js';
-import { classify } from '../core/classify.js';
-import { similarity } from '../core/similarity.js';
-import { visibleText } from '../core/visible-text.js';
-import { registrableDomain } from '../core/domain.js';
 import { fetcher } from '../net/fetcher.js';
-import { shouldRetry } from '../net/retry.js';
+import { resolveRepoReadme } from '../net/github-readme.js';
+import { defaultSleep, judgeLink } from '../net/judge-link.js';
+import { MAX_BODY_BYTES as FETCH_MAX_BYTES } from '../net/read-capped.js';
 import { createWaybackClient } from '../net/wayback.js';
-import type { Judgement, Link, SnapshotResult } from '../core/types.js';
+import type { Judgement } from '../core/types.js';
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -34,91 +27,9 @@ import type { Judgement, Link, SnapshotResult } from '../core/types.js';
 const MAX_URLS = 3;
 const MAX_BODY_BYTES = 1_048_576; // 1 MB
 const TIMEOUT_MS = 8_000;
-const MAX_BYTES = 524_288; // 512 KB
-const RETRY_DELAY_MS = 2_000;
+const RESOLVE_MAX_BYTES = FETCH_MAX_BYTES; // 512 KB
 const SNAPSHOT_TEXT_CAP = 65_536; // 64 KB
 // shortcut: fixed 64 KB cap, raise it if the Worker is moved to the paid plan.
-
-// ---------------------------------------------------------------------------
-// Helpers
-// ---------------------------------------------------------------------------
-
-function sleep(ms: number): Promise<void> {
-  return new Promise(resolve => setTimeout(resolve, ms));
-}
-
-function hostnameOf(url: string): string {
-  try {
-    return new URL(url).hostname;
-  } catch {
-    return '';
-  }
-}
-
-// ---------------------------------------------------------------------------
-// Per-URL scan logic (Worker edition — pool of 3, no meta event)
-// ---------------------------------------------------------------------------
-
-async function scanUrl(url: string): Promise<Judgement> {
-  const wayback = createWaybackClient();
-
-  // Build a minimal Link for the URL (no source spans in API mode)
-  const link: Link = { url, spans: [] };
-
-  // Fetch with standard limits
-  let probe = await fetcher(url, { timeoutMs: TIMEOUT_MS, maxBytes: MAX_BYTES });
-
-  // 5xx: retry once after 2 s
-  // The retry skips DNS confirmation (keeps the per-URL subrequest budget at 16).
-  if (shouldRetry(probe)) {
-    await sleep(RETRY_DELAY_MS);
-    probe = await fetcher(url, { timeoutMs: TIMEOUT_MS, maxBytes: MAX_BYTES, skipDns: true });
-  }
-
-  // Determine whether we need a snapshot text for the possessed check
-  let snapshotText: SnapshotResult | undefined;
-  if (
-    probe.outcome === 'response' &&
-    probe.status !== undefined &&
-    probe.status >= 200 &&
-    probe.status <= 299 &&
-    probe.finalUrl !== undefined
-  ) {
-    const origDomain = registrableDomain(hostnameOf(url));
-    const finalDomain = registrableDomain(hostnameOf(probe.finalUrl));
-    if (origDomain !== finalDomain && finalDomain !== '') {
-      const rawText = await wayback.getSnapshotText(url);
-      // Apply 64 KB cap before similarity computation
-      snapshotText =
-        rawText.status === 'text'
-          ? { status: 'text', text: rawText.text.slice(0, SNAPSHOT_TEXT_CAP) }
-          : rawText;
-    }
-  }
-
-  // Also cap the probe body text before classify feeds it to similarity
-  const cappedProbe =
-    probe.text !== undefined && probe.text.length > SNAPSHOT_TEXT_CAP
-      ? { ...probe, text: visibleText(probe.text).slice(0, SNAPSHOT_TEXT_CAP) }
-      : probe.text !== undefined && probe.outcome === 'response' && probe.status !== undefined && probe.status >= 200 && probe.status <= 299
-        ? { ...probe, text: visibleText(probe.text).slice(0, SNAPSHOT_TEXT_CAP) }
-        : probe;
-
-  const { verdict, reason } = classify(cappedProbe, url, snapshotText);
-
-  const judgement: Judgement = { link, verdict, reason };
-
-  // Enrich with epitaph and resurrection for dead/possessed links
-  if (verdict === 'dead' || verdict === 'possessed') {
-    judgement.epitaph = await wayback.getEpitaph(url);
-    const resurrection = await wayback.getResurrection(url);
-    if (resurrection !== undefined) {
-      judgement.resurrection = resurrection;
-    }
-  }
-
-  return judgement;
-}
 
 // ---------------------------------------------------------------------------
 // Hono app
@@ -172,38 +83,11 @@ app.post('/api/scan', async (c) => {
 
     const validUrls = urls as string[];
 
-    // ---- Guard each URL ----
-    const guardedJudgements: Judgement[] = [];
-    const passingUrls: string[] = [];
-
-    for (const url of validUrls) {
-      const result = guard(url);
-      if (!result.ok) {
-        guardedJudgements.push({
-          link: { url, spans: [] },
-          verdict: 'restless',
-          reason: `Not checked: ${result.reason}.`,
-        });
-      } else {
-        passingUrls.push(url);
-      }
-    }
-
-    // ---- Run up to 3 concurrent fetcher calls ----
-    const fetchPromises = passingUrls.map(url => scanUrl(url));
-    const fetchedJudgements = await Promise.all(fetchPromises);
-
-    // ---- Build result, preserving original order ----
-    const judgementsMap = new Map<string, Judgement>();
-    for (const j of guardedJudgements) {
-      judgementsMap.set(j.link.url, j);
-    }
-    for (const j of fetchedJudgements) {
-      judgementsMap.set(j.link.url, j);
-    }
-
-    const judgements: Judgement[] = validUrls.map(url => judgementsMap.get(url)!);
-
+    // ---- Judge up to 3 URLs concurrently (guard included), order preserved ----
+    const deps = { fetcher, wayback: createWaybackClient(), sleep: defaultSleep };
+    const judgements: Judgement[] = await Promise.all(
+      validUrls.map(url => judgeLink({ url, spans: [] }, deps, { textCap: SNAPSHOT_TEXT_CAP })),
+    );
     return c.json({ judgements });
   } catch {
     // Never expose stack traces
@@ -238,34 +122,30 @@ app.post('/api/resolve', async (c) => {
 
     // ---- Handle kind === 'url' ----
     if (kind === 'url') {
-      const guardResult = guard(input);
-      if (!guardResult.ok) {
-        return c.json({ error: guardResult.reason }, 422);
-      }
+      // The shared fetcher guards the URL and every redirect hop, caps the body at 512 KB
+      // and keeps the 8 s timeout running while the body is read.
+      const probe = await fetcher(input, { timeoutMs: TIMEOUT_MS, maxBytes: RESOLVE_MAX_BYTES });
 
-      let response: Response;
-      try {
-        const controller = new AbortController();
-        const timer = setTimeout(() => controller.abort(), TIMEOUT_MS);
-        try {
-          response = await fetch(input, {
-            signal: controller.signal,
-            headers: { 'User-Agent': 'Revenant/1.0' },
-          });
-        } finally {
-          clearTimeout(timer);
+      if (probe.outcome === 'timeout') {
+        return c.json({ error: 'Could not load that address: no answer within 8 s.' }, 422);
+      }
+      if (probe.outcome === 'network-error') {
+        if (probe.blocked) {
+          return c.json({ error: `That address is not allowed: ${probe.text ?? 'blocked'}` }, 422);
         }
-      } catch (err) {
-        const message = err instanceof Error ? err.message : String(err);
-        return c.json({ error: `Failed to fetch: ${message}` }, 422);
+        if (probe.dnsFailure) {
+          return c.json({ error: 'Could not load that address: the domain no longer resolves.' }, 422);
+        }
+        return c.json({ error: `Could not load that address: ${probe.text ?? 'network error'}` }, 422);
+      }
+      const status = probe.status ?? 0;
+      if (status < 200 || status >= 300) {
+        return c.json({ error: `Could not load that address: it answered ${status}.` }, 422);
       }
 
-      if (!response.ok) {
-        return c.json({ error: `Failed to fetch: HTTP ${response.status}` }, 422);
-      }
-
-      const responseText = await response.text();
-      const contentTypeHeader = response.headers.get('content-type') ?? '';
+      // Kind is detected from the Content-Type header (fetcher exposes it) or a body sniff.
+      const responseText = probe.text ?? '';
+      const contentTypeHeader = probe.contentType ?? '';
       const trimmed = responseText.trimStart();
       const isHtml =
         trimmed.startsWith('<!DOCTYPE html') ||
@@ -278,59 +158,16 @@ app.post('/api/resolve', async (c) => {
 
     // ---- Handle kind === 'repo' ----
     if (kind === 'repo') {
-      if (!/^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/.test(input)) {
-        return c.json({ error: 'Input must be in owner/repo format' }, 422);
+      const result = await resolveRepoReadme(input);
+      if (result.ok) {
+        return c.json({ source: result.source, kind: result.kind });
       }
-
-      const [owner, repo] = input.split('/');
-      const apiUrl = `https://api.github.com/repos/${owner}/${repo}/contents/README.md`;
-
-      let response: Response;
-      try {
-        const controller = new AbortController();
-        const timer = setTimeout(() => controller.abort(), TIMEOUT_MS);
-        try {
-          response = await fetch(apiUrl, {
-            signal: controller.signal,
-            headers: {
-              'Accept': 'application/vnd.github.v3+json',
-              'User-Agent': 'Revenant/1.0',
-            },
-          });
-        } finally {
-          clearTimeout(timer);
-        }
-      } catch {
-        return c.json({ error: 'Repository not found or README missing' }, 422);
-      }
-
-      if (!response.ok) {
-        return c.json({ error: 'Repository not found or README missing' }, 422);
-      }
-
-      let githubData: unknown;
-      try {
-        githubData = await response.json();
-      } catch {
-        return c.json({ error: 'Repository not found or README missing' }, 422);
-      }
-
-      if (
-        typeof githubData !== 'object' ||
-        githubData === null ||
-        typeof (githubData as Record<string, unknown>)['content'] !== 'string'
-      ) {
-        return c.json({ error: 'Repository not found or README missing' }, 422);
-      }
-
-      const encoded = (githubData as Record<string, unknown>)['content'] as string;
-      const decoded = atob(encoded.replace(/\n/g, ''));
-
-      return c.json({ source: decoded, kind: 'markdown' });
+      const status = { 'not-found': 404, 'rate-limited': 429, invalid: 400, unavailable: 502 } as const;
+      return c.json({ error: result.message }, status[result.code]);
     }
   } catch {
     // Never expose stack traces
-    return c.json({ error: 'Internal error' }, 422);
+    return c.json({ error: 'Internal error' }, 500);
   }
 });
 

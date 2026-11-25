@@ -1,5 +1,5 @@
 /**
- * CLI integration tests — test/cli.int.test.ts
+ * CLI integration tests â€” test/cli.int.test.ts
  *
  * Tests the runCli() exported function using fake Fetcher and Wayback
  * and a temporary file on disk (for --fix tests).
@@ -11,8 +11,8 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { writeFileSync, readFileSync, mkdtempSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
-import { runCli } from '../src/cli/index.js';
-import type { Fetcher, Probe, SnapshotResult, Wayback, Epitaph, CliOutput } from '../src/core/types.js';
+import { runCli } from '../src/cli/run.js';
+import type { Fetcher, Probe, SnapshotResult, Wayback, ArchiveAnswer, Epitaph, CliOutput } from '../src/core/types.js';
 
 // ---------------------------------------------------------------------------
 // Test URLs
@@ -37,13 +37,10 @@ const LIVE_TEXT_POSSESSED =
   'buy now discount casino poker gambling slots promotion special offer';
 
 const fakeWayback: Wayback = {
-  async getEpitaph(_url: string): Promise<Epitaph | 'unavailable'> {
-    return EPITAPH;
-  },
-  async getResurrection(url: string): Promise<string | undefined> {
-    if (url === URL_DEAD) return RESURRECTION_URL_DEAD;
-    if (url === URL_POSSESSED) return RESURRECTION_URL_POSSESSED;
-    return undefined;
+  async getArchive(url: string): Promise<ArchiveAnswer> {
+    if (url === URL_DEAD) return { epitaph: EPITAPH, resurrection: RESURRECTION_URL_DEAD };
+    if (url === URL_POSSESSED) return { epitaph: EPITAPH, resurrection: RESURRECTION_URL_POSSESSED };
+    return { epitaph: 'none' };
   },
   async getSnapshotText(url: string): Promise<SnapshotResult> {
     if (url === URL_POSSESSED) return { status: 'text', text: SNAPSHOT_TEXT_POSSESSED };
@@ -76,7 +73,7 @@ const fakeFetcher: Fetcher = async (url: string): Promise<Probe> => {
 };
 
 // ---------------------------------------------------------------------------
-// Fake Fetcher — all alive
+// Fake Fetcher â€” all alive
 // ---------------------------------------------------------------------------
 
 const allAliveFetcher: Fetcher = async (url: string): Promise<Probe> => {
@@ -147,11 +144,10 @@ describe('CLI default output with mixed verdicts', () => {
     // Alive link does NOT appear in default output.
     expect(stdout).not.toContain(URL_ALIVE);
 
-    // stderr should be empty for a normal run.
-    expect(stderr).toBe('');
+    expect(stderr).toBe('4 links: 1 alive, 1 dead, 1 possessed, 1 restless\n');
   });
 
-  it('each output line has format: [verdict] url — reason (resurrection)', async () => {
+  it('each output line has format: [verdict] url â€” reason (resurrection)', async () => {
     const filePath = writeTmpFile('mixed.md', MIXED_DOCUMENT);
     const { stdout } = await runCli([filePath], fakeFetcher, fakeWayback);
 
@@ -175,7 +171,7 @@ describe('CLI all-alive: no output, exit 0', () => {
 
     expect(exitCode).toBe(0);
     expect(stdout).toBe('');
-    expect(stderr).toBe('');
+    expect(stderr).toBe('1 link: 1 alive, 0 dead, 0 possessed, 0 restless\n');
   });
 });
 
@@ -344,7 +340,7 @@ describe('CLI missing input argument', () => {
 // Archive notes in default output
 // ---------------------------------------------------------------------------
 
-describe('runCli — archive notes', () => {
+describe('runCli â€” archive notes', () => {
   it('prints the never-archived and unreachable sentences for dead links', async () => {
     const dir = mkdtempSync(join(tmpdir(), 'revenant-note-'));
     try {
@@ -357,11 +353,8 @@ describe('runCli — archive notes', () => {
         text: '',
       });
       const wayback: Wayback = {
-        async getEpitaph(url: string) {
-          return url.includes('never') ? 'none' : 'unavailable';
-        },
-        async getResurrection() {
-          return undefined;
+        async getArchive(url: string) {
+          return { epitaph: url.includes('never') ? ('none' as const) : ('unavailable' as const) };
         },
         async getSnapshotText() {
           return { status: 'none' };
@@ -376,5 +369,63 @@ describe('runCli — archive notes', () => {
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Streaming and summary line (task 15.11)
+// ---------------------------------------------------------------------------
+
+describe('CLI streaming', () => {
+  it('writes the first finished link before the last fetch resolves', async () => {
+    const filePath = writeTmpFile('stream.md', `- [Dead](${URL_DEAD})\n- [Alive](${URL_ALIVE})\n`);
+    const order: string[] = [];
+    const slowFetcher: Fetcher = async (url: string): Promise<Probe> => {
+      if (url === URL_ALIVE) {
+        await new Promise(r => setTimeout(r, 80));
+        order.push('last-fetch-resolved');
+        return { outcome: 'response', status: 200, finalUrl: url, text: 'good content' };
+      }
+      return { outcome: 'response', status: 404, finalUrl: url, text: '' };
+    };
+    const res = await runCli([filePath], slowFetcher, fakeWayback, {
+      out: line => order.push(`out:${line}`),
+      err: () => {},
+    });
+    expect(order[0]).toMatch(/^out:\[dead\] /);
+    expect(order.indexOf('last-fetch-resolved')).toBeGreaterThan(0);
+    expect(res.stdout).toBe(order[0]!.slice(4) + '\n');
+  });
+});
+
+describe('CLI summary line', () => {
+  it('lists all four counts for mixed verdicts, on stderr only', async () => {
+    const filePath = writeTmpFile('sum.md', MIXED_DOCUMENT);
+    const { stdout, stderr } = await runCli([filePath], fakeFetcher, fakeWayback);
+    expect(stderr.trim().split('\n').pop()).toBe('4 links: 1 alive, 1 dead, 1 possessed, 1 restless');
+    expect(stdout).not.toContain('links:');
+  });
+
+  it('says "1 link:" for a single link', async () => {
+    const filePath = writeTmpFile('one.md', `- [Dead](${URL_DEAD})`);
+    const { stderr } = await runCli([filePath], fakeFetcher, fakeWayback);
+    expect(stderr).toBe('1 link: 0 alive, 1 dead, 0 possessed, 0 restless\n');
+  });
+
+  it('--json keeps stdout valid JSON in document order; summary on stderr only', async () => {
+    const filePath = writeTmpFile('sumjson.md', MIXED_DOCUMENT);
+    const { stdout, stderr } = await runCli([filePath, '--json'], fakeFetcher, fakeWayback);
+    const parsed: CliOutput = JSON.parse(stdout);
+    expect(parsed.links.map(l => l.url)).toEqual([URL_DEAD, URL_POSSESSED, URL_RESTLESS, URL_ALIVE]);
+    expect(stderr).toBe('4 links: 1 alive, 1 dead, 1 possessed, 1 restless\n');
+  });
+
+  it('--fix prints Patched line then the summary on stderr', async () => {
+    const filePath = writeTmpFile('sumfix.md', MIXED_DOCUMENT);
+    const { stdout, stderr } = await runCli([filePath, '--fix'], fakeFetcher, fakeWayback);
+    expect(stdout).toBe('');
+    expect(stderr).toBe(
+      `Patched 2 links in ${filePath}\n4 links: 1 alive, 1 dead, 1 possessed, 1 restless\n`,
+    );
   });
 });

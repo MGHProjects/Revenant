@@ -1,11 +1,14 @@
 import { guard } from '../core/guard.js';
 import type { Fetcher, Probe } from '../core/types.js';
 import { confirmNoDns } from './dns.js';
+import { decodeUtf8, discardBody, MAX_BODY_BYTES, readCapped } from './read-capped.js';
+import { USER_AGENT } from './user-agent.js';
 
 const DEFAULT_TIMEOUT_MS = 8_000;
-const DEFAULT_MAX_BYTES = 524_288; // 512 KB
+const DEFAULT_MAX_BYTES = MAX_BODY_BYTES; // 512 KB
 const MAX_REDIRECTS = 5;
-const USER_AGENT = 'Revenant/1.0';
+/** Requests one fetch call can make: the first plus every redirect. */
+export const MAX_HOPS = MAX_REDIRECTS + 1;
 
 /** Cloudflare error 1016 (origin DNS error) arrives as HTTP 530 on Workers. */
 const DNS_ERROR_STATUS = 530;
@@ -18,7 +21,6 @@ function hostnameOf(url: string): string {
   }
 }
 
-
 export const fetcher: Fetcher = async (
   url: string,
   init?: { timeoutMs: number; maxBytes: number; skipDns?: boolean },
@@ -30,7 +32,7 @@ export const fetcher: Fetcher = async (
   // Validate the initial URL before any network activity.
   const initialGuard = guard(url);
   if (!initialGuard.ok) {
-    return { outcome: 'network-error', text: initialGuard.reason };
+    return { outcome: 'network-error', text: initialGuard.reason, blocked: true };
   }
 
   const controller = new AbortController();
@@ -61,7 +63,7 @@ export const fetcher: Fetcher = async (
 
       // On Workers an unresolvable host answers 530 instead of throwing. Confirm with DNS.
       if (response.status === DNS_ERROR_STATUS && !skipDns) {
-        await response.body?.cancel().catch(() => undefined);
+        await discardBody(response);
         const dns = await confirmNoDns(hostnameOf(currentUrl));
         if (dns.confirmed) {
           return {
@@ -70,18 +72,20 @@ export const fetcher: Fetcher = async (
             dnsFailure: true,
           };
         }
-        // Two queries spent: a retry plus Wayback would break the per-URL budget.
+        // Any DoH query spent: a retry plus Wayback would break the per-URL subrequest budget.
         return {
           outcome: 'response',
           status: response.status,
           finalUrl: currentUrl,
           text: '',
-          ...(dns.queries >= 2 ? { noRetry: true as const } : {}),
+          ...(dns.queries >= 1 ? { noRetry: true as const } : {}),
         };
       }
 
       // Handle redirects manually.
       if (response.status >= 300 && response.status < 400) {
+        // The 3xx body is never read: release the connection before following or giving up.
+        await discardBody(response);
         if (redirectCount >= MAX_REDIRECTS) {
           return { outcome: 'network-error', text: 'too many redirects' };
         }
@@ -101,7 +105,7 @@ export const fetcher: Fetcher = async (
 
         const guardResult = guard(resolvedLocation);
         if (!guardResult.ok) {
-          return { outcome: 'network-error', text: guardResult.reason };
+          return { outcome: 'network-error', text: guardResult.reason, blocked: true };
         }
 
         currentUrl = resolvedLocation;
@@ -112,34 +116,7 @@ export const fetcher: Fetcher = async (
       // Non-redirect: read body up to maxBytes.
       let text = '';
       try {
-        const reader = response.body?.getReader();
-        if (reader) {
-          const decoder = new TextDecoder();
-          let bytesRead = 0;
-          const chunks: string[] = [];
-
-          while (true) {
-            const { done, value } = await reader.read();
-            if (done) break;
-
-            const remaining = maxBytes - bytesRead;
-            if (value.length >= remaining) {
-              // Truncate at the cap — not an error.
-              chunks.push(decoder.decode(value.slice(0, remaining), { stream: false }));
-              bytesRead += remaining;
-              // Cancel the stream so we don't hold the connection open.
-              await reader.cancel();
-              break;
-            }
-
-            chunks.push(decoder.decode(value, { stream: true }));
-            bytesRead += value.length;
-          }
-
-          text = chunks.join('');
-        } else {
-          text = await response.text();
-        }
+        text = decodeUtf8(await readCapped(response, maxBytes));
       } catch (err: unknown) {
         if (controller.signal.aborted) {
           return { outcome: 'timeout' };
@@ -148,11 +125,13 @@ export const fetcher: Fetcher = async (
         return { outcome: 'network-error', text: message };
       }
 
+      const contentType = response.headers.get('content-type');
       return {
         outcome: 'response',
         status: response.status,
         finalUrl: currentUrl,
         text,
+        ...(contentType ? { contentType } : {}),
       };
     }
   } finally {

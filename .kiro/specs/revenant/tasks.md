@@ -170,6 +170,33 @@ Build Revenant as a TypeScript ESM project targeting Cloudflare Workers (web + W
   - [x] 13.3 Write `README.md`: one-paragraph description, Graveyard screenshots showing all four verdicts, CLI usage examples (`revenant`, `--fix`, `--json`), MCP configuration instructions, local development instructions (`npm run dev`, `npm test`).
     - _Requirements: 6, 7, 8_
 
+- [ ] 15. Review fixes (wrong results, first impression, honesty)
+  - [x] 15.1 A1 Resurrection picks the right capture. One CDX request per URL (`fl=timestamp,length`, `filter=statuscode:200`, `collapse=timestamp:6`). A pure function in `src/core` splits captures into lives at gaps over 12 months and picks the longest life by time span (tie: earliest). Epitaph first = first capture of that life; resurrection and epitaph last = last capture of that life with length at least half the life's median length, else the life's last capture. The possessed comparison and MCP `resurrect` without a date use the same capture. Add a "See every capture" link to `https://web.archive.org/web/*/{url}` next to "Open the archived page". Property tests, a dmoz series test, and updates to requirements.md, design.md, costume.md and tech.md.
+    - _Requirements: 3.1, 3.2, 2.5, 8.3_
+  - [x] 15.2 A2 owner/repo input. One shared function used by the Worker and `scan.ts`: GitHub `/repos/{owner}/{repo}/readme`, decoded as UTF-8. On rate limit fall back to `raw.githubusercontent.com/{owner}/{repo}/HEAD/README.md`. Distinct errors for "not found" and "GitHub rate limit reached, paste the document instead". Test with a README containing an em dash and an emoji.
+    - _Requirements: 1.3, 1.4_
+  - [x] 15.3 A3 One per-link pipeline. Move the per-link logic into one function in `src/net` used by the Worker, CLI and MCP (visible text on both sides of the comparison, 64 KB cap where configured); delete the copy in `src/worker/index.ts`. Test that the same fixture gives the same verdict through both paths.
+    - _Requirements: 2.5, 5_
+  - [x] 15.4 A4 CLI and MCP entry guard. Reproduce the symlinked-bin failure of `isEntryPoint`; if confirmed (or shown by the code), split each into a logic module and a small entry file that always runs; point the esbuild scripts and `bin` at the entry files.
+    - _Requirements: 7.1, 8.1_
+  - [x] 15.5 B1 Empty state. Hide the tally and the inscription band until there are results; the yard shows its ground line; the hero has one primary "Scan the sample" button that loads and scans in one click; `/?sample=1` does the same on load.
+    - _Requirements: 6.1, 6.9_
+  - [x] 15.6 B2 and B3 Yard layout. Column count follows the number of plots so rows are balanced (9 links with room for 8 gives 5 + 4). Host labels wrap to two lines and rows stay aligned.
+    - _Requirements: 6.1, 6.2_
+  - [x] 15.7 B4 `/api/resolve` with kind `url` uses the shared fetcher (guarded redirects, size cap, timeout over the body). Internal errors return 500, not 422.
+    - _Requirements: 1.3, 5_
+  - [x] 15.8 B5 and B6 Worker budget. Cap the Wayback snapshot body at 512 KB. Cache API `match`/`put` count toward the 50-subrequest limit: recount the real per-request worst case including 429 retries and cache calls, keep it at or under 50 (one cache `match` and at most one `put` per URL if needed), and correct the budget comments and design.md.
+    - _Requirements: 3.3, 5_
+  - [x] 15.9 B7 Favicon (tombstone shape as SVG) and Open Graph title, description and image tags.
+    - _Requirements: 6_
+  - [x] 15.10 C3, C4 and C5 Cleanup. `classify.ts`: remove the reference to the deleted graveyard.html and the "task 6.3" comment; 401 reason becomes "Answers 401: needs a login. Not judged." (403 and 429 unchanged). Remove the duplicated branch in `cappedProbe`, the unused `_now` and `_fetcher` parameters, and close the AudioContext after the bell. User-Agent "Revenant/1.0 (+https://revenant.mgh-web.workers.dev)" on every outbound request.
+    - _Requirements: 2.9, 5_
+  - [x] 15.11 C6 CLI streams. Print each line when its judgement arrives and end with one summary line on stderr ("9 links: 2 alive, 3 dead, 2 possessed, 2 restless").
+    - _Requirements: 7.2_
+  - [-] 15.12 C1 and C2 README honesty. Fix the 5xx and "content still matches" claims; cite Pew Research Center (2024) for the 38% figure or remove it; say the brief in `docs/brief` and the UI reference in `docs/design` were written with Claude and Kiro generated the spec and all application code; replace `<owner>` with MGHProjects; "Try it" uses the one-click sample; add the same-domain-hijack limit. Screenshots are retaken from production after the redeploy.
+    - _Requirements: 6, 7, 8_
+  - [x] 15.13 Epitaph and resurrection come from one archive answer. A local sample scan gave dmoz.org a resurrection but no epitaph (blank stone, ledger "Archived copy"). One CDX answer yields both, or neither; a judgement never has a resurrection without an epitaph. Test the 429-then-success sequence.
+    - _Requirements: 3.1, 3.2_
 ## Notes
 
 - All property-based test tasks (2.4, 3.3, 4.4, 4.8, 5.3, 6.5, 6.6, 9.4) and the scan integration test (6.7) are **mandatory** — they are the correctness evidence for the project.
@@ -212,7 +239,20 @@ Build Revenant as a TypeScript ESM project targeting Cloudflare Workers (web + W
     { "id": 24, "tasks": ["14.12"] },
     { "id": 25, "tasks": ["13.1"] },
     { "id": 26, "tasks": ["13.2"] },
-    { "id": 27, "tasks": ["13.3"] }
+    { "id": 27, "tasks": ["13.3"] },
+    { "id": 28, "tasks": ["15.1"] },
+    { "id": 29, "tasks": ["15.2"] },
+    { "id": 30, "tasks": ["15.3"] },
+    { "id": 31, "tasks": ["15.4"] },
+    { "id": 32, "tasks": ["15.5"] },
+    { "id": 33, "tasks": ["15.13"] },
+    { "id": 34, "tasks": ["15.6"] },
+    { "id": 35, "tasks": ["15.7"] },
+    { "id": 36, "tasks": ["15.8"] },
+    { "id": 37, "tasks": ["15.9"] },
+    { "id": 38, "tasks": ["15.10"] },
+    { "id": 39, "tasks": ["15.11"] },
+    { "id": 40, "tasks": ["15.12"] }
   ]
 }
 ```

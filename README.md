@@ -73,19 +73,21 @@ $ revenant samples/haunted-readme.md
 [dead] http://www.dmoz.org/ — The domain no longer resolves. (https://web.archive.org/web/20250305234014/http://www.dmoz.org/)
 [possessed] http://www.geocities.com/SiliconValley/ — Redirects to yahoo.com; 0% like the archived page. (https://web.archive.org/web/19991009015113/http://www.geocities.com/SiliconValley/)
 [restless] https://api.github.com/user — Answers 401 to robots. Not judged. (—)
+9 links: 2 alive, 3 dead, 3 possessed, 1 restless
 ```
 
-(Excerpt. Lines appear in the order the checks finish.)
+(Excerpt. The last line is the summary, written to stderr.) Lines appear as each check finishes, so they follow the order the checks finish, not the order of the document. The summary always lists all four counts and says 1 link: for a single link. It is written to stderr in every mode.
 
 ### `--fix`
 
 Overwrites the file, replacing each dead or possessed link that has an archived copy with the
-snapshot URL. It prints `Patched N links in <file>` to stderr and no per-link lines. `--fix` works
+snapshot URL. It prints `Patched N links in <file>` to stderr, then the summary line, and no per-link lines. `--fix` works
 on files only; with a URL it prints an error and exits 2.
 
 ```console
 $ revenant docs/links.md --fix
 Patched 6 links in docs/links.md
+9 links: 2 alive, 3 dead, 3 possessed, 1 restless
 ```
 
 The exit code still reflects what was found before the patch, so the run above exits 1. Run the
@@ -93,7 +95,7 @@ check again without `--fix` to confirm.
 
 ### `--json`
 
-Prints one JSON object on stdout, with one entry per distinct link. `resurrection` and `epitaph`
+Prints one JSON object on stdout at the end, with one entry per distinct link, in document order (by first span). Nothing is streamed; the summary still goes to stderr. `resurrection` and `epitaph`
 are present only when known. `spans` are character offsets of the link in the source. This is an
 excerpt for two of the nine sample links:
 
@@ -255,11 +257,15 @@ Imports go one way: `worker`, `cli`, `mcp` and `web` use `net`, and `net` uses `
 
 ## Limits worth knowing
 
+- `possessed` is only detected when the link redirects to another registrable domain. A hijacked domain that serves new content at the same address is reported `alive`.
 - A scan covers at most 200 links. The web app says so when the cap is hit.
 - The Worker runs on the Cloudflare free plan, so `POST /api/scan` accepts at most 3 URLs per request. The web app sends batches of 3, two at a time.
 - In the Worker, text similarity compares only the first 64 KB of visible text on each side. The CLI and MCP server run on Node and use the same core.
-- When the Wayback Machine cannot be reached, a link that needed it for comparison is `restless`, not `dead` or `possessed`. The archive times out under bursts of requests, so repeated back-to-back CLI runs can show more `restless` links than a single run.
-- Outbound requests are limited to http and https hosts by name. IP literals, `localhost`, `*.local`, `*.internal` and URLs with credentials are refused. Each request has an 8 s timeout, a 512 KB body cap and at most 5 redirects.
+- Response bodies are read up to 512 KB. Outbound requests have an 8 s timeout and follow at most 5 redirects.
+- The Worker keeps Wayback answers for 24 h in memory only. It does not use the Cache API, because those calls count toward the free plan's 50 subrequests per request. The memory lives inside one Worker isolate, so a later request can miss the cache and ask the archive again.
+- The Wayback Machine can throttle the Worker (HTTP 429) or time out under bursts of requests. A link that needed the archive for comparison is then `restless`, not `dead` or `possessed`. Repeated back-to-back CLI runs can show more `restless` links than a single run.
+- For `owner/repo` input, Revenant reads the README through the GitHub API. When GitHub rate-limits the request, it falls back to `raw.githubusercontent.com` (`README.md` on the default branch). If that fails too, the web app asks you to paste the document.
+- Outbound requests are limited to http and https hosts by name. IP literals, `localhost`, `*.local`, `*.internal`, `*.localhost` and URLs with credentials are refused, and the link is `restless` (not checked).
 
 ## Built with Kiro
 

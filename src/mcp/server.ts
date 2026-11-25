@@ -1,4 +1,3 @@
-#!/usr/bin/env node
 /**
  * Revenant MCP server (stdio) — tools: check_links, resurrect.
  *
@@ -40,7 +39,6 @@ function fail(message: string): ToolResult {
 export async function handleCheckLinks(
   args: { text?: string; urls?: string[] },
   deps: McpDeps,
-  now: Date = new Date(),
 ): Promise<ToolResult> {
   const hasText = typeof args.text === 'string' && args.text.trim() !== '';
   const urls = Array.isArray(args.urls) ? args.urls.filter(u => typeof u === 'string') : [];
@@ -52,7 +50,7 @@ export async function handleCheckLinks(
   const judgements: Judgement[] = [];
   let total = 0;
   let capped = false;
-  for await (const event of scan(source, 'markdown', deps.fetcher, deps.wayback, now)) {
+  for await (const event of scan(source, 'markdown', deps.fetcher, deps.wayback)) {
     if (event.type === 'meta') {
       total = event.total;
       capped = event.capped;
@@ -90,18 +88,17 @@ export async function handleResurrect(
   let unknown = false;
   let snapshot: { url: string; date: string } | undefined;
 
-  if (deps.wayback.getClosestSnapshot) {
+  // With a date: closest snapshot to it. Without: the longest-life capture, same as check_links.
+  if (args.date !== undefined && deps.wayback.getClosestSnapshot) {
     const r = await deps.wayback.getClosestSnapshot(url, args.date);
     if (r.status === 'found') snapshot = { url: r.url, date: r.date };
     else if (r.status === 'none') lost = true;
     else unknown = true;
   } else {
-    // Fallback for Wayback implementations without a closest-date lookup.
-    const [res, epi] = await Promise.all([
-      deps.wayback.getResurrection(url),
-      deps.wayback.getEpitaph(url),
-    ]);
-    if (res !== undefined) snapshot = { url: res, date: '' };
+    const { epitaph: epi, resurrection: res } = await deps.wayback.getArchive(url);
+    if (res !== undefined) {
+      snapshot = { url: res, date: typeof epi === 'object' ? epi.last : '' };
+    }
     else if (epi === 'unavailable') unknown = true;
     else lost = true;
   }
@@ -137,7 +134,7 @@ export function createMcpServer(deps: McpDeps): Server {
       {
         name: 'resurrect',
         description:
-          'Find the Wayback Machine snapshot of a URL closest to a date (default: most recent).',
+          'Find the Wayback Machine snapshot of a URL closest to a date. Without a date: the last good capture of the longest continuous life of the URL.',
         inputSchema: {
           type: 'object',
           properties: {
@@ -168,25 +165,8 @@ export function createMcpServer(deps: McpDeps): Server {
   return server;
 }
 
-// ---------------------------------------------------------------------------
-// stdio entry point — only when run directly
-// ---------------------------------------------------------------------------
-
-const isEntryPoint = (() => {
-  try {
-    const entryUrl = new URL(`file://${process.argv[1]!.replace(/\\/g, '/')}`).href;
-    const moduleUrl = import.meta.url;
-    return entryUrl === moduleUrl || moduleUrl.endsWith(process.argv[1]!.replace(/\\/g, '/'));
-  } catch {
-    return false;
-  }
-})();
-
-if (isEntryPoint) {
+/** Connects a server with the default network clients to stdin/stdout. */
+export async function startStdio(): Promise<void> {
   const server = createMcpServer({ fetcher: defaultFetcher, wayback: createWaybackClient() });
-  server.connect(new StdioServerTransport()).catch((err: unknown) => {
-    const message = err instanceof Error ? err.message : String(err);
-    process.stderr.write(`revenant-mcp: ${message}\n`);
-    process.exit(1);
-  });
+  await server.connect(new StdioServerTransport());
 }

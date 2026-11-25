@@ -15,12 +15,12 @@ inclusion: always
 ## External services (free, no key)
 
 - Wayback availability: `https://archive.org/wayback/available?url={u}&timestamp={yyyymmdd}`
-- Wayback CDX: `https://web.archive.org/cdx/search/cdx?url={u}&output=json&fl=timestamp,statuscode&filter=statuscode:200&limit=1`
-  (`limit=1` = first good capture, `limit=-1` = last good capture)
+- Wayback CDX (one request per URL): `https://web.archive.org/cdx/search/cdx?url={u}&output=json&fl=timestamp,length&filter=statuscode:200&collapse=timestamp:6`
+  (one good capture per month, oldest first; `src/core/lives.ts` picks the longest continuous life)
 - Raw snapshot body (no Wayback toolbar): `https://web.archive.org/web/{timestamp}id_/{u}`
 
 Be a polite client: descriptive User-Agent, at most 6 concurrent requests, cache Wayback answers
-with the Workers Cache API for 24 h, back off on 429.
+for 24 h (in memory, see the budget below), back off on 429.
 
 ## Cloudflare free plan (decided 16 Nov 2026)
 
@@ -28,8 +28,9 @@ The Worker runs on the free plan: **50 subrequests and 10 ms CPU per request**. 
 
 - The browser runs `extract` itself (core is pure and bundled) and owns the 200-link cap.
 - `POST /api/scan` takes `{ urls: string[] }` with **at most 3 URLs** and returns
-  `{ judgements: Judgement[] }` as plain JSON. No SSE. Worst case per URL is 2 attempts × 6 hops
-  + 3 Wayback calls = 15 subrequests, so 3 URLs stay under 50.
+  `{ judgements: Judgement[] }` as plain JSON. No SSE. Worst case per URL is 16 subrequests (2 attempts × 6 hops + CDX 2 + `id_` 2, each with one 429 retry),
+  so 3 URLs use 48 of 50. Every fetch counts, **Cache API `match`/`put` calls count too** and share the same 50,
+  so the Worker makes none and caches Wayback answers in memory only. `src/net/judge-link.ts` exports `PER_URL_WORST_CASE`.
 - The browser sends 2 batches at a time (6 links in flight). Graves rise as batches return.
 - Resolving a page URL or `owner/repo` into source text is its own endpoint, `POST /api/resolve`.
 - `similarity` runs only on the first 64 KB of visible text of each side, to stay inside 10 ms CPU.

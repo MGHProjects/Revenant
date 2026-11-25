@@ -46,12 +46,12 @@ describe('POST /api/scan with HTTP 530', () => {
     expect(targetCalls).toHaveLength(1);
   });
 
-  it('an unconfirmed 530 (A record present) is retried once, then restless', async () => {
+  it('an unconfirmed 530 (A record present) is not retried (subrequest budget), restless', async () => {
     vi.useFakeTimers({ toFake: ['setTimeout'] });
     const targetCalls = stub({ Status: 0, Answer: [{ type: 1, data: '203.0.113.9' }] });
     const j = await scan();
     expect(j.verdict).toBe('restless');
-    expect(j.reason).toBe('Answers 530, twice. Not judged.');
-    expect(targetCalls).toHaveLength(2);
+    expect(j.reason).toBe('Answers 530. Not judged.');
+    expect(targetCalls).toHaveLength(1);
   });
 });

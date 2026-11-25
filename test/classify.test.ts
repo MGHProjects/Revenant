@@ -61,7 +61,7 @@ describe('classify â€” decision table', () => {
     const probe: Probe = { outcome: 'response', status: 401, finalUrl: ORIGINAL_URL };
     const result = classify(probe, ORIGINAL_URL);
     expect(result.verdict).toBe('restless');
-    expect(result.reason).toBe('Answers 401 to robots. Not judged.');
+    expect(result.reason).toBe('Answers 401: needs a login. Not judged.');
   });
 
   // Row 3b: 403 â†’ restless
