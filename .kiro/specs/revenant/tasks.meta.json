@@ -1624,6 +1624,11 @@
         "executionId": "3b28221b-9bbf-4579-ac32-20838f757568",
         "chatSessionId": "sess_e72fc9f8-796b-436a-a688-fd774785d218",
         "timestamp": 1795603459064
+      },
+      {
+        "executionId": "2b92e875-5b3c-4549-a002-bc22fdecbc71",
+        "chatSessionId": "sess_e72fc9f8-796b-436a-a688-fd774785d218",
+        "timestamp": 1795610378723
       }
     ],
     "15.13 Epitaph and resurrection come from one archive answer. A local sample scan gave dmoz.org a resurrection but no epitaph (blank stone, ledger \"Archived copy\"). One CDX answer yields both, or neither; a judgement never has a resurrection without an epitaph. Test the 429-then-success sequence.": [
@@ -1636,6 +1641,144 @@
         "executionId": "3b28221b-9bbf-4579-ac32-20838f757568",
         "chatSessionId": "sess_e72fc9f8-796b-436a-a688-fd774785d218",
         "timestamp": 1795600783016
+      }
+    ],
+    "15. Review fixes (wrong results, first impression, honesty)": [
+      {
+        "executionId": "2b92e875-5b3c-4549-a002-bc22fdecbc71",
+        "chatSessionId": "sess_e72fc9f8-796b-436a-a688-fd774785d218",
+        "timestamp": 1795610378852
+      }
+    ],
+    "16.1 Resurrection steps back from the end of the life. In `chooseLife`, after the longest life: span = calendar months first to last; margin = min(12, floor(span / 4)); candidates = captures at or before (last month - margin); copy = last candidate with length at least half the candidates' median, else the last candidate; one capture returns itself. The stone's years and height keep the whole life; the copy date is a separate field and the inscription reads \"copy from {date}\". Expected on the real series: dmoz 20170301000315, freebase 20150501201938, codeplex 20170101075357, geocities/SiliconValley 19990202115713. Property tests, the dmoz tail test, and updates to requirements.md, design.md, costume.md and the README limits.": [
+      {
+        "executionId": "2b92e875-5b3c-4549-a002-bc22fdecbc71",
+        "chatSessionId": "sess_e72fc9f8-796b-436a-a688-fd774785d218",
+        "timestamp": 1795610383636
+      },
+      {
+        "executionId": "2b92e875-5b3c-4549-a002-bc22fdecbc71",
+        "chatSessionId": "sess_e72fc9f8-796b-436a-a688-fd774785d218",
+        "timestamp": 1795610391200
+      },
+      {
+        "executionId": "2b92e875-5b3c-4549-a002-bc22fdecbc71",
+        "chatSessionId": "sess_e72fc9f8-796b-436a-a688-fd774785d218",
+        "timestamp": 1795617210964
+      }
+    ],
+    "16.2 Repository README without the GitHub API. `resolveRepoReadme` asks `raw.githubusercontent.com/{owner}/{repo}/HEAD/{name}` first for README.md, readme.md, README, Readme.md, README.markdown, stopping at the first 200; the API only when all are 404, with `GITHUB_TOKEN` when the environment has it. Distinct \"not found\" and \"rate limit\" errors stay.": [
+      {
+        "executionId": "2b92e875-5b3c-4549-a002-bc22fdecbc71",
+        "chatSessionId": "sess_e72fc9f8-796b-436a-a688-fd774785d218",
+        "timestamp": 1795610383722
+      },
+      {
+        "executionId": "2b92e875-5b3c-4549-a002-bc22fdecbc71",
+        "chatSessionId": "sess_e72fc9f8-796b-436a-a688-fd774785d218",
+        "timestamp": 1795617212417
+      },
+      {
+        "executionId": "2b92e875-5b3c-4549-a002-bc22fdecbc71",
+        "chatSessionId": "sess_e72fc9f8-796b-436a-a688-fd774785d218",
+        "timestamp": 1795617393914
+      }
+    ],
+    "16.3 Ask again. The inscription has an \"Ask again\" button for a restless link and for a dead or possessed link whose archive lookup failed; it re-judges that one link through `/api/scan` and updates its plot, ledger row, tally and patch note in place. When a scan ends, links whose archive lookup failed (including restless links whose only cause was the archive) are asked again once automatically. Judgements carry an explicit archive-unavailable flag.": [
+      {
+        "executionId": "2b92e875-5b3c-4549-a002-bc22fdecbc71",
+        "chatSessionId": "sess_e72fc9f8-796b-436a-a688-fd774785d218",
+        "timestamp": 1795610383826
+      },
+      {
+        "executionId": "2b92e875-5b3c-4549-a002-bc22fdecbc71",
+        "chatSessionId": "sess_e72fc9f8-796b-436a-a688-fd774785d218",
+        "timestamp": 1795617394971
+      },
+      {
+        "executionId": "2b92e875-5b3c-4549-a002-bc22fdecbc71",
+        "chatSessionId": "sess_e72fc9f8-796b-436a-a688-fd774785d218",
+        "timestamp": 1795620805922
+      }
+    ],
+    "16.4 Inscription visible with the yard. The band is `position: sticky; bottom: 0` while its natural position is below the window, only when the window is at least 700 px tall and wider than the narrow breakpoint; opaque background, the existing top line; `scroll-padding-bottom` keeps a focused plot visible. DOM and focus order unchanged.": [
+      {
+        "executionId": "2b92e875-5b3c-4549-a002-bc22fdecbc71",
+        "chatSessionId": "sess_e72fc9f8-796b-436a-a688-fd774785d218",
+        "timestamp": 1795610383903
+      },
+      {
+        "executionId": "2b92e875-5b3c-4549-a002-bc22fdecbc71",
+        "chatSessionId": "sess_e72fc9f8-796b-436a-a688-fd774785d218",
+        "timestamp": 1795620806638
+      },
+      {
+        "executionId": "2b92e875-5b3c-4549-a002-bc22fdecbc71",
+        "chatSessionId": "sess_e72fc9f8-796b-436a-a688-fd774785d218",
+        "timestamp": 1795621602962
+      }
+    ],
+    "16.5 Host labels break only after dots (`wbr` built with DOM nodes); a part that still does not fit is cut with an ellipsis and the full host stays in `title`.": [
+      {
+        "executionId": "2b92e875-5b3c-4549-a002-bc22fdecbc71",
+        "chatSessionId": "sess_e72fc9f8-796b-436a-a688-fd774785d218",
+        "timestamp": 1795610383992
+      },
+      {
+        "executionId": "2b92e875-5b3c-4549-a002-bc22fdecbc71",
+        "chatSessionId": "sess_e72fc9f8-796b-436a-a688-fd774785d218",
+        "timestamp": 1795621603706
+      },
+      {
+        "executionId": "2b92e875-5b3c-4549-a002-bc22fdecbc71",
+        "chatSessionId": "sess_e72fc9f8-796b-436a-a688-fd774785d218",
+        "timestamp": 1795621791128
+      }
+    ],
+    "16.6 A graveyard has an address. `/?repo=owner/name` and `/?url=https://...` fill the address field and scan on load; a scan started from the address field writes that parameter with `history.replaceState` and shows a \"Copy link\" button near the status. A pasted document never goes into the URL. Two example links in the README \"Try it\".": [
+      {
+        "executionId": "2b92e875-5b3c-4549-a002-bc22fdecbc71",
+        "chatSessionId": "sess_e72fc9f8-796b-436a-a688-fd774785d218",
+        "timestamp": 1795610384084
+      },
+      {
+        "executionId": "2b92e875-5b3c-4549-a002-bc22fdecbc71",
+        "chatSessionId": "sess_e72fc9f8-796b-436a-a688-fd774785d218",
+        "timestamp": 1795621791260
+      },
+      {
+        "executionId": "2b92e875-5b3c-4549-a002-bc22fdecbc71",
+        "chatSessionId": "sess_e72fc9f8-796b-436a-a688-fd774785d218",
+        "timestamp": 1795622902038
+      }
+    ],
+    "16.7 Finish 15.12. Fix the four README lines still wrong (\"persistent 5xx\", \"401 to robots\", `<owner>`, \"human-written requirements and design brief\") plus the rest of the 15.12 text, verified in the file. Retake the three screenshots from production after 16.1 to 16.5 are deployed.": [
+      {
+        "executionId": "2b92e875-5b3c-4549-a002-bc22fdecbc71",
+        "chatSessionId": "sess_e72fc9f8-796b-436a-a688-fd774785d218",
+        "timestamp": 1795610384167
+      },
+      {
+        "executionId": "2b92e875-5b3c-4549-a002-bc22fdecbc71",
+        "chatSessionId": "sess_e72fc9f8-796b-436a-a688-fd774785d218",
+        "timestamp": 1795622902117
+      }
+    ],
+    "16.8 Kiro guards its own documents, and the build has a log. A hook in `.kiro/hooks` runs Revenant's CLI on `README.md` (report every dead or possessed link) and on files in `samples/` (report only links whose verdict differs from the expected-verdicts comment) when they are saved, and feeds the result back to the agent. `docs/build-log.md` describes how the project was built with Kiro, section by section, with a file or commit for every fact; hook runs are described by configuration, not invented catches; Claude's contributions are stated plainly.": [
+      {
+        "executionId": "2b92e875-5b3c-4549-a002-bc22fdecbc71",
+        "chatSessionId": "sess_e72fc9f8-796b-436a-a688-fd774785d218",
+        "timestamp": 1795610384251
+      },
+      {
+        "executionId": "2b92e875-5b3c-4549-a002-bc22fdecbc71",
+        "chatSessionId": "sess_e72fc9f8-796b-436a-a688-fd774785d218",
+        "timestamp": 1795623004248
+      },
+      {
+        "executionId": "2b92e875-5b3c-4549-a002-bc22fdecbc71",
+        "chatSessionId": "sess_e72fc9f8-796b-436a-a688-fd774785d218",
+        "timestamp": 1795626108881
       }
     ]
   }

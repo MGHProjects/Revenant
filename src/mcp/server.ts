@@ -97,7 +97,7 @@ export async function handleResurrect(
   } else {
     const { epitaph: epi, resurrection: res } = await deps.wayback.getArchive(url);
     if (res !== undefined) {
-      snapshot = { url: res, date: typeof epi === 'object' ? epi.last : '' };
+      snapshot = { url: res, date: typeof epi === 'object' ? epi.copy : '' };
     }
     else if (epi === 'unavailable') unknown = true;
     else lost = true;
@@ -134,7 +134,7 @@ export function createMcpServer(deps: McpDeps): Server {
       {
         name: 'resurrect',
         description:
-          'Find the Wayback Machine snapshot of a URL closest to a date. Without a date: the last good capture of the longest continuous life of the URL.',
+          'Find the Wayback Machine snapshot of a URL closest to a date. Without a date: a good capture from the longest continuous life of the URL, stepped back from its end.',
         inputSchema: {
           type: 'object',
           properties: {

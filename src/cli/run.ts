@@ -132,7 +132,7 @@ export async function runCli(
   const judgements: Judgement[] = [];
   const stream = !jsonFlag && !fixFlag;
 
-  for await (const event of scan(source, kind, fetcher, wayback)) {
+  for await (const event of scan(source, kind, fetcher, wayback, process.env['GITHUB_TOKEN'])) {
     if (event.type === 'judgement') {
       const j = event.judgement;
       judgements.push(j);
@@ -167,6 +167,7 @@ export async function runCli(
         reason: j.reason,
         ...(j.resurrection !== undefined ? { resurrection: j.resurrection } : {}),
         ...(j.epitaph !== undefined ? { epitaph: j.epitaph } : {}),
+        ...(j.archiveUnavailable ? { archiveUnavailable: true as const } : {}),
         spans: j.link.spans,
       })),
     };

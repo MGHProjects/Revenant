@@ -63,13 +63,14 @@ describe('judgeLink — archive answer is all-or-nothing', () => {
     expect(j.resurrection).toBeUndefined();
   });
 
-  it('real answer: both, and the resurrection month equals the epitaph last month', async () => {
+  it('real answer: both, and the resurrection month equals the epitaph copy month', async () => {
     const requested = stubWayback(() => new Response(CDX_OK, { status: 200 }));
     const url = 'http://gone-c.example.com/';
     const j = await judgeLink(linkOf(url), { fetcher: notFound, wayback: createWaybackClient(), sleep: noSleep });
     if (typeof j.epitaph !== 'object') throw new Error('expected a dated epitaph');
     expect(j.resurrection).toBe(`https://web.archive.org/web/20120301000000/${url}`);
     expect(j.epitaph.last.slice(0, 7)).toBe('2012-03');
+    expect(j.epitaph.copy).toBe('2012-03-01'); // span 2 months: margin 0, no step back
     expect(cdxCount(requested)).toBe(1);
     expect(requested).toHaveLength(1);
   });

@@ -27,7 +27,7 @@ const URL_ALIVE     = 'https://alive.example.com/page';
 // Fake Wayback
 // ---------------------------------------------------------------------------
 
-const EPITAPH: Epitaph = { first: '2015-01-01', last: '2021-06-15' };
+const EPITAPH: Epitaph = { first: '2015-01-01', last: '2021-06-15', copy: '2020-06-15' };
 const RESURRECTION_URL_DEAD = 'https://web.archive.org/web/20210615000000/https://dead.example.com/page';
 const RESURRECTION_URL_POSSESSED = 'https://web.archive.org/web/20210615000000/https://possessed.example.com/page';
 
@@ -293,6 +293,8 @@ describe('CLI --json output', () => {
     const deadEntry = parsed!.links.find(l => l.url === URL_DEAD);
     expect(deadEntry).toBeDefined();
     expect(deadEntry!.resurrection).toBe(RESURRECTION_URL_DEAD);
+    expect(deadEntry!.epitaph).toEqual(EPITAPH);
+    expect((deadEntry!.epitaph as Epitaph).copy).toBe('2020-06-15');
   });
 
   it('--json output contains verdicts for all links including alive (Requirement 7.6)', async () => {

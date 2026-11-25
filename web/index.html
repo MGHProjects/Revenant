@@ -32,6 +32,10 @@
       <div class="hero-text">
         <h1 class="fell status" id="status" tabindex="-1">Paste a document. Its links rise here.</h1>
         <p class="sub">Dead and possessed links come back from the Internet Archive.</p>
+        <div class="copy-row">
+          <button type="button" class="btn sm" id="copy-link" hidden>Copy link</button>
+          <input type="text" class="field mono" id="copy-fallback" readonly hidden aria-label="Link to this graveyard" />
+        </div>
         <button type="button" class="btn go hero-go" id="scan-sample">Scan the sample</button>
         <div class="tally" id="tally" hidden>
           <span><span class="dot alive"></span><span id="n-alive">0</span> alive</span>

@@ -170,7 +170,7 @@ Build Revenant as a TypeScript ESM project targeting Cloudflare Workers (web + W
   - [x] 13.3 Write `README.md`: one-paragraph description, Graveyard screenshots showing all four verdicts, CLI usage examples (`revenant`, `--fix`, `--json`), MCP configuration instructions, local development instructions (`npm run dev`, `npm test`).
     - _Requirements: 6, 7, 8_
 
-- [ ] 15. Review fixes (wrong results, first impression, honesty)
+- [x] 15. Review fixes (wrong results, first impression, honesty)
   - [x] 15.1 A1 Resurrection picks the right capture. One CDX request per URL (`fl=timestamp,length`, `filter=statuscode:200`, `collapse=timestamp:6`). A pure function in `src/core` splits captures into lives at gaps over 12 months and picks the longest life by time span (tie: earliest). Epitaph first = first capture of that life; resurrection and epitaph last = last capture of that life with length at least half the life's median length, else the life's last capture. The possessed comparison and MCP `resurrect` without a date use the same capture. Add a "See every capture" link to `https://web.archive.org/web/*/{url}` next to "Open the archived page". Property tests, a dmoz series test, and updates to requirements.md, design.md, costume.md and tech.md.
     - _Requirements: 3.1, 3.2, 2.5, 8.3_
   - [x] 15.2 A2 owner/repo input. One shared function used by the Worker and `scan.ts`: GitHub `/repos/{owner}/{repo}/readme`, decoded as UTF-8. On rate limit fall back to `raw.githubusercontent.com/{owner}/{repo}/HEAD/README.md`. Distinct errors for "not found" and "GitHub rate limit reached, paste the document instead". Test with a README containing an em dash and an emoji.
@@ -193,10 +193,27 @@ Build Revenant as a TypeScript ESM project targeting Cloudflare Workers (web + W
     - _Requirements: 2.9, 5_
   - [x] 15.11 C6 CLI streams. Print each line when its judgement arrives and end with one summary line on stderr ("9 links: 2 alive, 3 dead, 2 possessed, 2 restless").
     - _Requirements: 7.2_
-  - [-] 15.12 C1 and C2 README honesty. Fix the 5xx and "content still matches" claims; cite Pew Research Center (2024) for the 38% figure or remove it; say the brief in `docs/brief` and the UI reference in `docs/design` were written with Claude and Kiro generated the spec and all application code; replace `<owner>` with MGHProjects; "Try it" uses the one-click sample; add the same-domain-hijack limit. Screenshots are retaken from production after the redeploy.
+  - [x] 15.12 C1 and C2 README honesty. Fix the 5xx and "content still matches" claims; cite Pew Research Center (2024) for the 38% figure or remove it; say the brief in `docs/brief` and the UI reference in `docs/design` were written with Claude and Kiro generated the spec and all application code; replace `<owner>` with MGHProjects; "Try it" uses the one-click sample; add the same-domain-hijack limit. Screenshots are retaken from production after the redeploy.
     - _Requirements: 6, 7, 8_
   - [x] 15.13 Epitaph and resurrection come from one archive answer. A local sample scan gave dmoz.org a resurrection but no epitaph (blank stone, ledger "Archived copy"). One CDX answer yields both, or neither; a judgement never has a resurrection without an epitaph. Test the 429-then-success sequence.
     - _Requirements: 3.1, 3.2_
+- [ ] 16. Production review fixes
+  - [x] 16.1 Resurrection steps back from the end of the life. In `chooseLife`, after the longest life: span = calendar months first to last; margin = min(12, floor(span / 4)); candidates = captures at or before (last month - margin); copy = last candidate with length at least half the candidates' median, else the last candidate; one capture returns itself. The stone's years and height keep the whole life; the copy date is a separate field and the inscription reads "copy from {date}". Expected on the real series: dmoz 20170301000315, freebase 20150501201938, codeplex 20170101075357, geocities/SiliconValley 19990202115713. Property tests, the dmoz tail test, and updates to requirements.md, design.md, costume.md and the README limits.
+    - _Requirements: 3.1, 3.2_
+  - [x] 16.2 Repository README without the GitHub API. `resolveRepoReadme` asks `raw.githubusercontent.com/{owner}/{repo}/HEAD/{name}` first for README.md, readme.md, README, Readme.md, README.markdown, stopping at the first 200; the API only when all are 404, with `GITHUB_TOKEN` when the environment has it. Distinct "not found" and "rate limit" errors stay.
+    - _Requirements: 1.3, 1.4_
+  - [x] 16.3 Ask again. The inscription has an "Ask again" button for a restless link and for a dead or possessed link whose archive lookup failed; it re-judges that one link through `/api/scan` and updates its plot, ledger row, tally and patch note in place. When a scan ends, links whose archive lookup failed (including restless links whose only cause was the archive) are asked again once automatically. Judgements carry an explicit archive-unavailable flag.
+    - _Requirements: 3.4, 6.1_
+  - [x] 16.4 Inscription visible with the yard. The band is `position: sticky; bottom: 0` while its natural position is below the window, only when the window is at least 700 px tall and wider than the narrow breakpoint; opaque background, the existing top line; `scroll-padding-bottom` keeps a focused plot visible. DOM and focus order unchanged.
+    - _Requirements: 6.1, 6.8_
+  - [x] 16.5 Host labels break only after dots (`wbr` built with DOM nodes); a part that still does not fit is cut with an ellipsis and the full host stays in `title`.
+    - _Requirements: 6.2_
+  - [x] 16.6 A graveyard has an address. `/?repo=owner/name` and `/?url=https://...` fill the address field and scan on load; a scan started from the address field writes that parameter with `history.replaceState` and shows a "Copy link" button near the status. A pasted document never goes into the URL. Two example links in the README "Try it".
+    - _Requirements: 1.3, 6.1_
+  - [-] 16.7 Finish 15.12. Fix the four README lines still wrong ("persistent 5xx", "401 to robots", `<owner>`, "human-written requirements and design brief") plus the rest of the 15.12 text, verified in the file. Retake the three screenshots from production after 16.1 to 16.5 are deployed.
+    - _Requirements: 6, 7, 8_
+  - [x] 16.8 Kiro guards its own documents, and the build has a log. A hook in `.kiro/hooks` runs Revenant's CLI on `README.md` (report every dead or possessed link) and on files in `samples/` (report only links whose verdict differs from the expected-verdicts comment) when they are saved, and feeds the result back to the agent. `docs/build-log.md` describes how the project was built with Kiro, section by section, with a file or commit for every fact; hook runs are described by configuration, not invented catches; Claude's contributions are stated plainly.
+    - _Requirements: 7_
 ## Notes
 
 - All property-based test tasks (2.4, 3.3, 4.4, 4.8, 5.3, 6.5, 6.6, 9.4) and the scan integration test (6.7) are **mandatory** — they are the correctness evidence for the project.
@@ -252,7 +269,15 @@ Build Revenant as a TypeScript ESM project targeting Cloudflare Workers (web + W
     { "id": 37, "tasks": ["15.9"] },
     { "id": 38, "tasks": ["15.10"] },
     { "id": 39, "tasks": ["15.11"] },
-    { "id": 40, "tasks": ["15.12"] }
+    { "id": 40, "tasks": ["15.12"] },
+    { "id": 41, "tasks": ["16.1"] },
+    { "id": 42, "tasks": ["16.2"] },
+    { "id": 43, "tasks": ["16.3"] },
+    { "id": 44, "tasks": ["16.4"] },
+    { "id": 45, "tasks": ["16.5"] },
+    { "id": 46, "tasks": ["16.6"] },
+    { "id": 47, "tasks": ["16.7"] },
+    { "id": 48, "tasks": ["16.8"] }
   ]
 }
 ```

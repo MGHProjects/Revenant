@@ -48,7 +48,7 @@ interface Probe {                       // what the network saw; input to classi
   dnsFailure?: true;                    // set only when DoH confirmed NXDOMAIN
 }
 
-interface Epitaph { first: string; last: string }   // ISO dates
+interface Epitaph { first: string; last: string; copy: string }   // ISO dates; copy = the capture the resurrection opens
 
 interface Judgement {
   link: Link;
@@ -74,12 +74,16 @@ type SnapshotResult =
   | { status: 'none' }
   | { status: 'unavailable' };
 interface Wayback {
-  getEpitaph(url: string): Promise<EpitaphResult>;
-  getResurrection(url: string): Promise<string | undefined>;
-  // 'text' = last good capture's visible text; 'none' = archive answered, no usable 200 capture;
+  // One CDX answer yields the epitaph and the resurrection together, or neither.
+  getArchive(url: string): Promise<ArchiveAnswer>;   // ArchiveAnswer = { epitaph: EpitaphResult; resurrection?: string }
+  // 'text' = the copy capture's visible text; 'none' = archive answered, no usable 200 capture;
   // 'unavailable' = archive could not be reached for the CDX lookup or the id_ body (never cached).
-  getSnapshotText(url: string): Promise<SnapshotResult>;
+  // Pass the ArchiveAnswer already fetched for this judgement so the CDX is not requested twice.
+  getSnapshotText(url: string, archive?: ArchiveAnswer): Promise<SnapshotResult>;
+  // Closest snapshot to `date` (YYYY-MM-DD), or the most recent when omitted. Optional so older fakes still type-check.
+  getClosestSnapshot?(url: string, date?: string): Promise<ClosestSnapshot>;
 }
+// ClosestSnapshot = { status: 'found'; url: string; date: string } | { status: 'none' } | { status: 'unreachable' }
 
 // Scan event union — all events yielded by scan()
 type ScanEvent =
@@ -193,7 +197,7 @@ The Wayback APIs used (one CDX request per URL):
 | Resurrection URL | Built from the chosen capture: `https://web.archive.org/web/{timestamp}/{url}` (no further API call) |
 | Snapshot text for `possessed` check | `https://web.archive.org/web/{timestamp}id_/{url}` |
 
-The client parses the header row and reads `timestamp` and `length` by column; a `length` of `-` or any non-numeric value is unknown. `chooseLife` in `src/core/lives.ts` (pure) picks the capture range: captures are split into lives wherever more than 12 calendar months (from the yyyymm part) separate consecutive captures; the longest life by span wins (tie: earliest); Epitaph first is its first capture; Epitaph last and the Resurrection are its last capture whose length is at least half the life's median known length, else the life's last capture. This keeps a later domain takeover (a parked or gambling page) out of the epitaph and the resurrection. `getSnapshotText` fetches the `id_` body of the same chosen capture, and MCP `resurrect` without a date uses it too; with a date, MCP keeps the closest-snapshot lookup (Availability API). No separate Availability call is needed for scans.
+The client parses the header row and reads `timestamp` and `length` by column; a `length` of `-` or any non-numeric value is unknown. `chooseLife` in `src/core/lives.ts` (pure) picks the capture range: captures are split into lives wherever more than 12 calendar months (from the yyyymm part) separate consecutive captures; the longest life by span wins (tie: earliest); Epitaph first and Epitaph last are the life's first and last captures (the stone shows the whole life). The copy, which the Resurrection and the possessed comparison use, is stepped back from the end because pages decay before they die: `span` = calendar months from the life's first to its last capture, `margin = min(12, floor(span / 4))`, `cutoff` = the month of the last capture minus `margin`, `candidates` = the life's captures at or before the cutoff month; the copy is the last candidate whose length is at least half the median candidate length, else the last candidate (a one-capture life is its own copy). This keeps a later domain takeover (a parked or gambling page) and the soft-404 pages that sites serve while dying out of the resurrection. `getSnapshotText` fetches the `id_` body of the copy capture, and MCP `resurrect` without a date uses it too (`snapshotDate` = the copy date); with a date, MCP keeps the closest-snapshot lookup (Availability API). No separate Availability call is needed for scans.
 
 **Caching**: all Wayback responses are cached for 24 hours. Every environment uses an in-memory `Map` keyed by URL (in the Worker it lives as long as the isolate). The platform Cache API is not used: its `match`/`put` calls count toward the Worker's 50 subrequests and would push the per-URL worst case past 16. Wayback bodies are read through the shared `readCapped` (`src/net/read-capped.ts`), 512 KB, stream cancelled at the cap, truncated body used as complete. Cache entry shape:
 
@@ -229,7 +233,7 @@ The five steps:
    - If 5xx: wait 2 s and call `fetcher` once more.
    - Only if 2xx AND `finalUrl` has a different registrable domain from `url`: call `wayback.getSnapshotText(url)`.
    - `classify(probe, url, snapshot?)` → `{ verdict, reason }`.
-   - If `dead` or `possessed`: call `wayback.getEpitaph(url)` → Epitaph; build Resurrection from the chosen capture.
+   - If `dead` or `possessed`: call `wayback.getArchive(url)` → Epitaph and Resurrection from the chosen capture (reusing the answer already fetched for the snapshot text).
    - Yield `{ type: 'judgement', judgement }`.
 5. **Same-domain alive links** cost zero Wayback calls.
 
@@ -253,10 +257,13 @@ A Hono application running on the Cloudflare free plan (50 subrequests, 10 ms CP
 - Request body: `{ input: string, kind: 'url' | 'repo' }`.
 - Response: `{ source: string, kind: 'markdown' | 'html' }` — the fetched and content-typed source text.
 - Errors: `{ error: string }`. 400 for invalid JSON or input. 500 `{ error: "Internal error" }` for unexpected exceptions (never a stack trace; same on `/api/scan`). For `kind: 'url'` the shared `fetcher` is used (guard on every redirect hop, max 5; 8 s timeout covering the body read; 512 KB cap, truncation is not an error). Kind comes from the Content-Type header (`Probe.contentType`) or a body sniff. 422 when the address cannot be loaded: non-2xx (`it answered {status}`), timeout (`no answer within 8 s`), guard rejection (`That address is not allowed: {reason}`, `Probe.blocked`), confirmed DNS failure (`the domain no longer resolves`), or other network error. For `kind: 'repo'`: 404 not found (or no README), 429 GitHub rate limit, 400 invalid `owner/repo`, 502 GitHub unreachable.
-- Repo input uses `resolveRepoReadme(slug, fetchImpl?)` in `src/net/github-readme.ts`, shared with `scan.ts`. It calls `GET https://api.github.com/repos/{owner}/{repo}/readme` (any README file name), decodes `content` as base64 bytes then UTF-8, and falls back to `download_url` (`raw.githubusercontent.com` only) when content is empty. On a rate limit (403 with `x-ratelimit-remaining: 0`, or 429) it falls back to `https://raw.githubusercontent.com/{owner}/{repo}/HEAD/README.md`; if that also fails the result is `rate-limited`. 8 s timeout, 512 KB body cap.
+- Repo input uses `resolveRepoReadme(slug, fetchImpl?, githubToken?)` in `src/net/github-readme.ts`, shared with `scan.ts`. Flow: (1) sequentially request `https://raw.githubusercontent.com/{owner}/{repo}/HEAD/{name}` for `README.md`, `readme.md`, `README`, `Readme.md`, `README.markdown`, stopping at the first 200 (decoded as UTF-8 through the capped reader, kind `markdown` for every name; bodies of non-200 answers are cancelled; any non-200 or network error moves to the next name). (2) Only if none answered 200, `GET https://api.github.com/repos/{owner}/{repo}/readme` (any file name, `docs/`), decoding `content` as base64 bytes then UTF-8 and falling back to `download_url` (`raw.githubusercontent.com` only) when content is empty. API 404 is `not-found`, 403 with `x-ratelimit-remaining: 0` or 429 is `rate-limited`, other statuses and network errors are `unavailable`. `githubToken` is sent as `Authorization: Bearer` to the API only, never to raw, and never logged. It is a parameter because `src/net` does not read `process.env`: the CLI passes `process.env.GITHUB_TOKEN`, and the Worker passes its optional `GITHUB_TOKEN` secret. Budget: `/api/resolve` has its own 50 subrequests; worst case is 5 raw + 1 API = 6, and a hit on `README.md` costs 1. 8 s timeout, 512 KB body cap.
 - Used by the browser before it starts batching, so the browser can run `extract` locally.
 
 Static assets are served from `dist/` (the Vite build output). `wrangler.toml` uses `[assets]` (not the legacy `[site]` bucket).
+
+### Ask again (`web/ask-again.ts`, `web/graveyard.ts`)
+`Judgement.archiveUnavailable?: true` is set in one place in `judgeLink` (after classify), from structured values: a restless verdict with snapshot `'unavailable'`, or a dead/possessed judgement whose epitaph is `'unavailable'`. The pure module `ask-again.ts` has `canAskAgain` (restless, or flagged), `retryIndexes` (flagged links, for the automatic retry), `chunk` and `mergeJudgement`. `graveyard.ts` runs `askAgain(index)` (one URL to `/api/scan`) and, at scan end, `retryArchive(gen)` once: batches of 3, 2 in flight, no reveal wait, results discarded when `scanGen` changed. Both use `applyReplacement`, which swaps the plot `li`, the ledger row and the inscription, then re-renders tally and patch note. The CLI `--json` and MCP output carry the flag; neither retries.
 
 ### Web UI (`web/`)
 
@@ -291,6 +298,8 @@ The moon icon advances one step per batch received. Batching: the browser extrac
 - Sound off by default with a visible toggle.
 
 **Sample document**: a single-activation control loads a pre-supplied document and triggers a scan without user input.
+
+**Graveyard address** (`web/scan-address.ts`, wired in `web/graveyard.ts`): the pure module has `parseScanParams(search)` (precedence sample > repo > url; the first one present wins, and an invalid value is reported, never skipped) and `searchAfterScan(search, origin)`, where origin is `sample`, `address` or `text`. `url` is validated with the core `guard`, which has no network code and is bundled in the browser, so the browser and the Worker apply the same host rules. After `resolve` succeeds, `graveyard.ts` calls `history.replaceState` with the new query, so the back button is unaffected. Textarea scans clear `sample`, `repo` and `url`; the document is never an input of `searchAfterScan`. The "Copy link" `.btn.sm` sits under the sub-heading and is shown only when `shareable` is true.
 
 ### CLI (`src/cli/`)
 
@@ -431,7 +440,7 @@ For any whole-year lifespan value `y ≥ 0`, `clamp(y * 8, 64, 176)` is in `[64,
 
 ### Property 12: The chosen life is the longest continuous one
 
-For any non-empty list of captures, `chooseLife` returns a `first` and `last` that both come from the input, with `first ≤ last`, inside one life (no gap over 12 calendar months). That life's span is at least that of every other life, and strictly greater than any earlier life's (ties go to the earliest). `last` is the life's last capture with length at least half the life's median known length, or the life's last capture when none qualifies. Input order does not matter.
+For any non-empty list of captures, `chooseLife` returns a `first`, `last` and `copy` that all come from the input, with `first ≤ copy ≤ last`, inside one life (no gap over 12 calendar months). That life's span is at least that of every other life, and strictly greater than any earlier life's (ties go to the earliest). `first` and `last` are the life's first and last captures. With `margin = min(12, floor(span / 4))`, so `margin ≤ 12` and `margin ≤ span / 4`, the copy's month is at most the last capture's month minus `margin`, and the copy is the last candidate (captures at or before that month) with length at least half the candidates' median known length, or the last candidate when none qualifies. A one-capture life returns that capture for all three. Input order does not matter.
 
 **Validates: Requirements 3.1, 3.2**
 
@@ -439,6 +448,19 @@ For any non-empty list of captures, `chooseLife` returns a `first` and `last` th
 
 For any plot count `n ≥ 1` and any `maxCols ≥ 1`, `cols = balancedColumns(n, maxCols)` satisfies `1 ≤ cols ≤ maxCols` and `cols × ceil(n / cols) ≥ n`. The layout uses the fewest rows possible (`ceil(n / maxCols)`), and the last row is short of `cols` by fewer plots than there are rows, so no plot sits alone under a wide empty row. With at most two rows, the rows differ by at most 1 plot (9 with room for 8 gives 5 + 4). With three or more rows a grid cannot always differ by 1 (13 with room for 6 gives 5 + 5 + 3), so the property states the weaker bound there.
 **Validates: Requirements 6.1, 6.2**
+
+### Property 14: Ask again replaces one judgement and nothing else
+For any list of judgements, any position `i` and any fresh judgement, `mergeJudgement` (`web/ask-again.ts`) returns a list of the same length and order in which every entry except `i` is the same object, entry `i` has the fresh verdict and keeps the original link (spans), and the set of unchecked Patch links is unchanged.
+**Validates: Requirements 3.5, 6.10**
+
+### Property 15: A graveyard's address round-trips and never carries a document
+
+For any valid `owner/name` or http(s) page URL and any unrelated parameters, `parseScanParams(searchAfterScan(search, {address}).search)` returns that repo or URL, and the unrelated parameters are unchanged. For a `text` origin the scan parameters are removed, unrelated ones stay, and the result is not shareable. Precedence is sample > repo > url.
+**Validates: Requirements 6.12, 6.13**
+
+### Property 16: host parts join back to the host
+For any host string, `hostParts` (`web/host-parts.ts`) returns parts that join back to exactly that host, each part except the last ends with a dot, and no part other than the last contains another dot, so a label can break only after a dot.
+**Validates: Requirements 6.2**
 
 ## Error Handling
 

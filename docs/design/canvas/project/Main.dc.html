@@ -30,7 +30,44 @@ a{color:#f1ecdd}a:hover{color:#f2a541}
 .rv .field:focus{border-color:#f1ecdd;outline:none}
 .rv label{display:block;font-size:14px;font-weight:600;margin-bottom:8px}
 
-.rv .yard{list-style:none;margin:56px 0 0;padding:0;display:grid;grid-template-columns:repeat(auto-fill,minmax(112px,1fr));row-gap:32px}
+/* Night: the sky lightens toward the horizon so the ink silhouettes read against it. */
+.rv .sky{position:relative;overflow:hidden;background:linear-gradient(#0b0d12 0,#0b0d12 88px,#1e2a47 100%)}
+.rv .moonbox{position:relative;flex:none}
+.rv .glow{position:absolute;left:50%;top:50%;width:560px;height:560px;margin:-280px 0 0 -280px;border-radius:50%;background:radial-gradient(closest-side,rgba(241,236,221,.14),rgba(241,236,221,.04) 46%,transparent);pointer-events:none;transition:opacity .9s ease-out}
+
+/* Horizon: static scenery in ink. It uses no verdict shape and no verdict colour. */
+.rv .horizon{position:relative;height:150px;margin-top:20px;--edge:calc(max(0px,(100% - 1200px) / 2) + 32px);--gate:calc(var(--edge) + 128px)}
+.rv .hill{position:absolute;left:0;bottom:0;width:100%;height:100%}
+.rv .tree{position:absolute;left:calc(var(--edge) + 36px);bottom:0;width:140px;height:150px}
+.rv .tree path{fill:none;stroke:#0b0d12;stroke-linecap:round}
+.rv .tree .trunk{fill:#0b0d12;stroke:none}
+.rv .tree .b1{stroke-width:4}
+.rv .tree .b2{stroke-width:2.2}
+.rv .gate{position:absolute;right:var(--gate);bottom:0;width:200px;height:112px;fill:#0b0d12}
+.rv .gate path{fill:none;stroke:#0b0d12;stroke-width:3}
+.rv .gate .bars{stroke-width:2}
+.rv .fence{position:absolute;bottom:0;height:54px;background:
+radial-gradient(circle at 12.5px 4px,#0b0d12 3px,transparent 3.6px) 0 0/26px 9px repeat-x,
+linear-gradient(#0b0d12,#0b0d12) 0 20px/100% 2px no-repeat,
+linear-gradient(#0b0d12,#0b0d12) 0 44px/100% 2px no-repeat,
+repeating-linear-gradient(90deg,transparent 0 11px,#0b0d12 11px 14px,transparent 14px 26px) 0 6px/100% 48px no-repeat}
+.rv .fence.l{left:0;right:calc(var(--gate) + 192px)}
+.rv .fence.r{right:0;left:calc(100% - var(--gate) - 8px)}
+
+/* Ground and mist. Mist is what has not been judged: all of it before a scan, none after, */
+/* except the share of links left restless. */
+.rv .ground{position:relative;display:flow-root;background:#0b0d12}
+.rv .ground>.wrap{position:relative;z-index:1}
+.rv .mist{position:absolute;left:0;right:0;top:-84px;height:270px;overflow:hidden;pointer-events:none;transition:opacity 1.4s ease-out}
+.rv .mist i{position:absolute;top:0;bottom:0;left:-50%;width:200%;animation:mist 90s linear infinite alternate;background:
+radial-gradient(ellipse 13% 34% at 10% 50%,rgba(201,210,227,.22),transparent 70%),
+radial-gradient(ellipse 17% 26% at 34% 60%,rgba(201,210,227,.15),transparent 70%),
+radial-gradient(ellipse 14% 38% at 60% 46%,rgba(201,210,227,.2),transparent 70%),
+radial-gradient(ellipse 16% 28% at 86% 62%,rgba(201,210,227,.15),transparent 70%)}
+.rv .mist i+i{top:36px;opacity:.7;animation-duration:140s;animation-direction:alternate-reverse}
+
+/* The first row stands in front of the fence: its tallest stone overlaps the lower rail. */
+.rv .yard{list-style:none;margin:-40px 0 0;padding:0 0 44px;min-height:150px;display:grid;grid-template-columns:repeat(auto-fill,minmax(112px,1fr));row-gap:32px}
 .rv .plot{width:100%;padding:0 0 14px;border:0;background:none;color:inherit;font:inherit;cursor:pointer;display:flex;flex-direction:column;align-items:center;position:relative}
 .rv .figure{position:relative;width:100%;height:200px;display:flex;align-items:flex-end;justify-content:center;overflow:hidden;border-bottom:1px solid #3a4459;transition:border-color .3s}
 .rv .plot:hover .figure,.rv .plot.sel .figure{border-bottom-color:#f1ecdd}
@@ -44,7 +81,8 @@ a{color:#f1ecdd}a:hover{color:#f2a541}
 .rv .plot::after{content:"";position:absolute;bottom:0;left:50%;width:28px;height:2px;margin-left:-14px;background:#f1ecdd;transform:scaleX(0);transition:transform .4s cubic-bezier(.16,1,.3,1)}
 .rv .plot.sel::after{transform:scaleX(1)}
 
-.rv .stone{width:64px;padding:10px 8px;border-radius:32px 32px 3px 3px;background:#46516a;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;font-family:"IM Fell English",Georgia,serif;font-size:15px;line-height:1;color:#f1ecdd}
+/* The moon is up on the right: stones catch it on their top and right edge. */
+.rv .stone{width:64px;padding:10px 8px;border-radius:32px 32px 3px 3px;background:linear-gradient(250deg,#56627d,#3f495f 62%);box-shadow:inset -1px 1px 0 rgba(241,236,221,.3);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;font-family:"IM Fell English",Georgia,serif;font-size:15px;line-height:1;color:#f1ecdd}
 .rv .stone .rule{width:18px;height:1px;background:#b8b4a6}
 .rv .lamp{animation:light 1.7s ease-out both;filter:drop-shadow(0 0 10px rgba(242,165,65,.6))}
 .rv .hand{animation:pulse 4s ease-in-out infinite}
@@ -52,7 +90,7 @@ a{color:#f1ecdd}a:hover{color:#f2a541}
 .rv .fog span{height:10px;border-radius:5px;background:#f1ecdd;animation:drift 6s ease-in-out infinite alternate}
 .rv .ghost{position:absolute;bottom:0;left:50%;margin-left:-22px;animation:ghost 1.2s cubic-bezier(.16,1,.3,1) both;pointer-events:none}
 
-.rv .moon{position:relative;flex:none;width:96px;height:96px;border-radius:50%;background:#f1ecdd;overflow:hidden;box-shadow:0 0 0 1px rgba(241,236,221,.35)}
+.rv .moon{position:relative;width:96px;height:96px;border-radius:50%;background:#f1ecdd;overflow:hidden;box-shadow:0 0 0 1px rgba(241,236,221,.35)}
 .rv .moon .shade{position:absolute;inset:-1px;border-radius:50%;background:#0c0f17;transition:transform .9s cubic-bezier(.16,1,.3,1)}
 
 .rv .tally{display:flex;flex-wrap:wrap;gap:8px 24px;margin-top:20px;font-size:15px;color:#b8b4a6}
@@ -69,12 +107,18 @@ a{color:#f1ecdd}a:hover{color:#f2a541}
 @keyframes drift{from{transform:translateX(-7px)}to{transform:translateX(7px)}}
 @keyframes ghost{0%{transform:translateY(30px);opacity:0}30%{opacity:1}100%{transform:translateY(-130px);opacity:0}}
 @keyframes fade{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
+@keyframes mist{from{transform:translateX(-12%)}to{transform:translateX(12%)}}
 
 @media (max-width:760px){
 .rv .wrap{padding-inline:20px}
 .rv .status{font-size:36px !important}
 .rv .moon{width:64px;height:64px}
-.rv .yard{grid-template-columns:repeat(3,minmax(0,1fr))}
+.rv .glow{width:380px;height:380px;margin:-190px 0 0 -190px}
+.rv .horizon{height:104px;--edge:20px}
+.rv .tree{left:8px;width:98px;height:104px}
+.rv .gate,.rv .fence.r{display:none}
+.rv .fence.l{right:0}
+.rv .yard{grid-template-columns:repeat(3,minmax(0,1fr));min-height:110px}
 .rv .figure{height:170px}
 .rv .lhead{display:none}
 .rv .lrow{grid-template-columns:1fr;gap:6px}
@@ -87,31 +131,79 @@ a{color:#f1ecdd}a:hover{color:#f2a541}
 </helmet>
 <div class="rv" style="min-height: 100vh; background: #0b0d12">
 
-<header style="background: linear-gradient(#0b0d12, #121827); padding-bottom: 0">
+<header class="sky">
 <div class="wrap">
 <div style="display: flex; align-items: center; justify-content: space-between; height: 72px">
 <span class="fell" style="font-size: 26px">Revenant</span>
 <button type="button" class="btn" aria-pressed="{{soundPressed}}" onClick="{{toggleSound}}" style="height: 36px; padding: 8px 14px; font-size: 14px">{{soundLabel}}</button>
 </div>
 
-<div style="display: flex; align-items: flex-start; justify-content: space-between; gap: 32px; padding-top: 40px">
+<div style="display: flex; align-items: flex-start; justify-content: space-between; gap: 32px; padding-top: 40px; min-height: 216px">
 <div style="min-width: 0">
 <h1 class="fell status" style="margin: 0; font-size: 56px; line-height: 1.05; letter-spacing: -0.01em">{{status}}</h1>
 <p style="margin: 14px 0 0; max-width: 52ch; color: #b8b4a6; font-size: 17px">Dead and possessed links come back from the Internet Archive.</p>
+<sc-if value="{{isEmpty}}" hint-placeholder-val="{{true}}">
+<button type="button" class="btn go" onClick="{{scan}}" style="margin-top: 28px">Scan the sample</button>
+</sc-if>
+<sc-if value="{{hasPlots}}" hint-placeholder-val="{{false}}">
 <div class="tally">
 <span><span class="dot" style="background: #f2a541"></span>{{nAlive}} alive</span>
 <span><span class="dot" style="background: #b8b4a6"></span>{{nDead}} dead</span>
 <span><span class="dot" style="background: #7dffb0"></span>{{nPossessed}} possessed</span>
 <span><span class="dot" style="background: #c9d2e3"></span>{{nRestless}} restless</span>
 </div>
+</sc-if>
 </div>
+<div class="moonbox">
+<span class="glow" style="opacity: {{glow}}"></span>
 <div class="moon" role="progressbar" aria-label="Scan progress" aria-valuemin="0" aria-valuemax="100" aria-valuenow="{{pct}}">
 <span class="shade" style="transform: translateX({{moonX}}%)"></span>
 </div>
 </div>
+</div>
+</div>
 
+<div class="horizon" aria-hidden="true">
+<svg class="hill" viewBox="0 0 1440 150" preserveAspectRatio="none">
+<path d="M0 150V96C150 70 300 58 470 82s330 46 520 28 300-42 450-24V150Z" fill="#141b2d"></path>
+</svg>
+<svg class="tree" viewBox="0 0 140 150">
+<path class="trunk" d="M61 150C63 128 60 112 62 95l8 0c0 17 2 35 6 55Z"></path>
+<path class="b1" d="M65 100C54 88 44 80 34 60"></path>
+<path class="b1" d="M67 98c11-12 23-18 35-38"></path>
+<path class="b1" d="M66 98c-2-20 2-38-2-62"></path>
+<path class="b2" d="M46 80c-8-2-16-4-26-2"></path>
+<path class="b2" d="M38 67c-2-9-8-17-14-23"></path>
+<path class="b2" d="M34 60c2-10 4-16 2-26"></path>
+<path class="b2" d="M88 80c8 0 16-2 26 0"></path>
+<path class="b2" d="M98 66c4-8 10-14 18-20"></path>
+<path class="b2" d="M102 60c0-10-2-18 2-28"></path>
+<path class="b2" d="M66 70c-8-8-12-16-16-28"></path>
+<path class="b2" d="M66 58c8-8 12-16 14-28"></path>
+<path class="b2" d="M64 36c-2-8-4-14-2-24"></path>
+</svg>
+<span class="fence l"></span>
+<svg class="gate" viewBox="0 0 200 112">
+<rect x="8" y="30" width="16" height="82"></rect>
+<rect x="4" y="24" width="24" height="6"></rect>
+<circle cx="16" cy="17" r="6"></circle>
+<rect x="176" y="30" width="16" height="82"></rect>
+<rect x="172" y="24" width="24" height="6"></rect>
+<circle cx="184" cy="17" r="6"></circle>
+<path d="M24 46Q100-6 176 46"></path>
+<path d="M24 58Q100 10 176 58"></path>
+<path d="M24 88H176"></path>
+<path class="bars" d="M40 112V49M52 112V43.6M64 112V39.4M76 112V36.4M88 112V34.6M100 112V34M112 112V34.6M124 112V36.4M136 112V39.4M148 112V43.6M160 112V49"></path>
+</svg>
+<span class="fence r"></span>
+</div>
+</header>
+
+<div class="ground">
+<div class="mist" aria-hidden="true" style="opacity: {{mist}}"><i></i><i></i></div>
+<div class="wrap">
 <ol class="yard" aria-label="Links in the document">
-<sc-for list="{{plots}}" as="p" hint-placeholder-count="9">
+<sc-for list="{{plots}}" as="p" hint-placeholder-count="0">
 <li>
 <button type="button" class="plot {{p.cls}}" aria-pressed="{{p.pressed}}" onClick="{{p.pick}}" onKeyDown="{{p.key}}">
 <span class="figure">
@@ -161,9 +253,10 @@ a{color:#f1ecdd}a:hover{color:#f2a541}
 </sc-for>
 </ol>
 </div>
-</header>
+</div>
 
-<section aria-label="Selected link" style="background: #10141d; border-bottom: 1px solid #232a39; min-height: 168px">
+<sc-if value="{{hasPlots}}" hint-placeholder-val="{{false}}">
+<section aria-label="Selected link" style="background: #10141d; border-block: 1px solid #232a39; min-height: 168px">
 <div class="wrap" style="padding-block: 32px">
 <sc-if value="{{noSel}}" hint-placeholder-val="{{false}}">
 <p class="fell" style="margin: 0; font-size: 24px; color: #b8b4a6">Choose a grave to read its inscription.</p>
@@ -178,19 +271,23 @@ a{color:#f1ecdd}a:hover{color:#f2a541}
 </div>
 <div style="flex: 0 1 420px; min-width: 0; display: flex; flex-direction: column; gap: 18px; align-items: flex-start">
 <sc-if value="{{selHasEpitaph}}" hint-placeholder-val="{{true}}">
-<p class="fell" style="margin: 0; font-size: 24px; line-height: 1.3; font-style: italic">{{selEpitaph}}</p>
+<p class="fell" style="margin: 0; font-size: 24px; line-height: 1.3">{{selEpitaph}}</p>
 </sc-if>
 <sc-if value="{{selCanRaise}}" hint-placeholder-val="{{true}}">
 <button type="button" class="btn go" onClick="{{resurrect}}">Resurrect</button>
 </sc-if>
 <sc-if value="{{selRaised}}" hint-placeholder-val="{{false}}">
-<a class="btn go" href="{{selSnap}}" style="animation: fade .5s cubic-bezier(.16,1,.3,1) both">Open the archived page</a>
+<div style="display: flex; flex-wrap: wrap; gap: 12px; animation: fade .5s cubic-bezier(.16,1,.3,1) both">
+<a class="btn go" href="{{selSnap}}">Open the archived page</a>
+<a class="btn" href="{{selAll}}">See every capture</a>
+</div>
 </sc-if>
 </div>
 </div>
 </sc-if>
 </div>
 </section>
+</sc-if>
 
 <main style="background: #0b0d12; padding-block: 56px 96px">
 <div class="wrap" style="display: flex; flex-direction: column; gap: 72px">
@@ -213,6 +310,7 @@ a{color:#f1ecdd}a:hover{color:#f2a541}
 </div>
 </form>
 
+<sc-if value="{{hasPlots}}" hint-placeholder-val="{{false}}">
 <section aria-labelledby="rv-ledger">
 <div style="display: flex; flex-wrap: wrap; gap: 16px; align-items: flex-end; justify-content: space-between; margin-bottom: 20px">
 <div>
@@ -229,7 +327,7 @@ a{color:#f1ecdd}a:hover{color:#f2a541}
 <span role="columnheader">Archived copy</span>
 <span role="columnheader">Patch</span>
 </div>
-<sc-for list="{{rows}}" as="r" hint-placeholder-count="9">
+<sc-for list="{{rows}}" as="r" hint-placeholder-count="0">
 <div role="row" class="lrow">
 <span role="cell" style="min-width: 0"><span style="font-weight: 600">{{r.host}}</span><br><span class="mono" style="font-size: 12px; color: #b8b4a6; overflow-wrap: anywhere">{{r.url}}</span></span>
 <span role="cell" class="tag {{r.v}}" style="font-weight: 600; font-size: 15px">{{r.label}}</span>
@@ -245,6 +343,7 @@ a{color:#f1ecdd}a:hover{color:#f2a541}
 </sc-for>
 </div>
 </section>
+</sc-if>
 
 </div>
 </main>
@@ -252,31 +351,31 @@ a{color:#f1ecdd}a:hover{color:#f2a541}
 </div>
 </x-dc>
 <script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1440,"height":1960}}'>
-// Illustrative data: hosts match samples/haunted-readme.md, dates and reasons are mock.
+// Illustrative data: the nine links of samples/haunted-readme.md with the verdicts production gave on 25 Nov 2026.
 const LINKS = [
-  { v: 'alive', host: 'paulgraham.com', url: 'http://paulgraham.com/hp.html', why: 'Answers 200 with the page it has always had.' },
-  { v: 'alive', host: 'w3.org', url: 'https://www.w3.org/History.html', why: 'Answers 200 with the page it has always had.' },
-  { v: 'dead', host: 'dmoz.org', url: 'http://www.dmoz.org/', from: 1999, to: 2017, seen: '14 Mar 2017', why: 'The name no longer resolves. Nothing answers at this address.' },
-  { v: 'dead', host: 'freebase.com', url: 'http://www.freebase.com/', from: 2007, to: 2016, seen: '2 May 2016', why: 'Answers 404. The page is gone.' },
-  { v: 'dead', host: 'google.com', url: 'https://www.google.com/reader/about/', from: 2005, to: 2013, seen: '1 Jul 2013', why: 'Answers 404. The page is gone.' },
-  { v: 'possessed', host: 'geocities.com', url: 'http://www.geocities.com/SiliconValley/', from: 1996, to: 2009, seen: '26 Oct 2009', why: 'Redirects to another site that shares almost nothing with the page that lived here.' },
-  { v: 'possessed', host: 'kiko.com', url: 'http://www.kiko.com/', from: 2005, to: 2006, seen: '18 Aug 2006', why: 'Redirects to another site that shares almost nothing with the page that lived here.' },
-  { v: 'possessed', host: 'codeplex.com', url: 'http://www.codeplex.com/', from: 2006, to: 2017, seen: '15 Dec 2017', why: 'Redirects to another site that shares almost nothing with the page that lived here.' },
-  { v: 'restless', host: 'npmjs.com', url: 'https://www.npmjs.com/package/left-pad', why: 'Refused the request with 403. It may be alive, so it is not judged dead.' }
+  { v: 'alive', host: 'paulgraham.com', url: 'https://www.paulgraham.com/hp.html', why: 'Answers 200 with the page you cited.' },
+  { v: 'alive', host: 'info.cern.ch', url: 'http://info.cern.ch/hypertext/WWW/TheProject.html', why: 'Answers 200 with the page you cited.' },
+  { v: 'dead', host: 'dmoz.org', url: 'http://www.dmoz.org/', from: 1999, to: 2017, ts: '20170301000315', seen: '1 Mar 2017', why: 'The domain no longer resolves.' },
+  { v: 'dead', host: 'freebase.com', url: 'http://www.freebase.com/', from: 1998, to: 2015, ts: '20150501201938', seen: '1 May 2015', why: 'Answers 404.' },
+  { v: 'dead', host: 'google.com', url: 'http://www.google.com/reader/about/', from: 2013, to: 2020, ts: '20200501010108', seen: '1 May 2020', why: 'Answers 404.' },
+  { v: 'possessed', host: 'geocities.com', url: 'http://www.geocities.com/SiliconValley/', from: 1996, to: 1999, ts: '19990202115713', seen: '2 Feb 1999', why: 'Redirects to yahoo.com; 0% like the archived page.' },
+  { v: 'restless', host: 'kiko.com', url: 'http://www.kiko.com/', why: 'No answer within 8 s. Not judged.' },
+  { v: 'possessed', host: 'codeplex.com', url: 'http://www.codeplex.com/', from: 2006, to: 2017, ts: '20170101075357', seen: '1 Jan 2017', why: 'Redirects to microsoft.com; 0% like the archived page.' },
+  { v: 'restless', host: 'api.github.com', url: 'https://api.github.com/user', why: 'Answers 401: needs a login. Not judged.' }
 ];
 const LABEL = { alive: 'Alive', dead: 'Dead', possessed: 'Possessed', restless: 'Restless' };
-const SAMPLE = '# awesome-early-web\n\nA reading list about the web we lost.\n\n## Essays that are still here\n\n- [Hackers and Painters](http://paulgraham.com/hp.html)\n- [A Little History of the World Wide Web](https://www.w3.org/History.html)\n\n## Directories that closed\n\n- [DMOZ](http://www.dmoz.org/)\n- [Freebase](http://www.freebase.com/)';
+const SAMPLE = '# awesome-early-web\n\nA reading list about the web we lost.\n\n## Essays that are still here\n\n- [Hackers and Painters](https://www.paulgraham.com/hp.html)\n- [The WorldWideWeb project](http://info.cern.ch/hypertext/WWW/TheProject.html)\n\n## Directories that closed\n\n- [The Open Directory Project](http://www.dmoz.org/)\n- [Freebase](http://www.freebase.com/)';
 
 class Component extends DCLogic {
-  state = { count: 0, phase: 'scanning', sel: null, raised: {}, ghost: null, sound: false, skip: {}, doc: SAMPLE };
+  // The page opens on the empty graveyard: horizon, mist, new moon. "Scan the sample" starts the scan.
+  state = { count: 0, phase: 'empty', sel: null, raised: {}, ghost: null, sound: false, skip: {}, doc: '' };
 
-  componentDidMount() { this.scan(); }
   componentWillUnmount() { clearTimeout(this.t); clearTimeout(this.g); }
 
   scan = (e) => {
     if (e && e.preventDefault) e.preventDefault();
     clearTimeout(this.t);
-    this.setState({ count: 0, phase: 'scanning', sel: null, raised: {}, ghost: null });
+    this.setState({ count: 0, phase: 'scanning', sel: null, raised: {}, ghost: null, doc: SAMPLE });
     const step = () => {
       const count = Math.min(LINKS.length, this.state.count + 3);
       const done = count === LINKS.length;
@@ -306,16 +405,23 @@ class Component extends DCLogic {
 
   renderVals() {
     const s = this.state;
+    const total = LINKS.length;
     const shown = LINKS.slice(0, s.count);
     const n = (v) => shown.filter((l) => l.v === v).length;
     const sel = s.sel != null ? shown[s.sel] : null;
     const canRaise = !!(sel && sel.seen);
     const raised = !!s.raised[s.sel];
     const patched = shown.filter((l, i) => l.seen && !s.skip[i]).length;
+    const empty = s.phase === 'empty';
     return {
-      status: s.phase === 'done' ? LINKS.length + ' links judged.' : 'Judging ' + LINKS.length + ' links.',
-      pct: Math.round((s.count / LINKS.length) * 100),
-      moonX: Math.round((s.count / LINKS.length) * 104),
+      status: empty ? 'Paste a document. Its links rise here.' : s.phase === 'done' ? total + ' links judged.' : 'Judging ' + total + ' links.',
+      isEmpty: empty,
+      hasPlots: s.count > 0,
+      pct: Math.round((s.count / total) * 100),
+      moonX: Math.round((s.count / total) * 104),
+      // Moonlight follows progress. Mist is the share not judged: links still waiting plus restless ones.
+      glow: (s.count / total).toFixed(2),
+      mist: empty ? 1 : ((total - s.count + n('restless')) / total).toFixed(2),
       nAlive: n('alive'), nDead: n('dead'), nPossessed: n('possessed'), nRestless: n('restless'),
       soundLabel: s.sound ? 'Sound on' : 'Sound off',
       soundPressed: s.sound ? 'true' : 'false',
@@ -337,9 +443,10 @@ class Component extends DCLogic {
       selCls: sel ? sel.v : '', selLabel: sel ? LABEL[sel.v] : '',
       selHost: sel ? sel.host : '', selUrl: sel ? sel.url : '', selWhy: sel ? sel.why : '',
       selHasEpitaph: canRaise,
-      selEpitaph: canRaise ? sel.from + ' – ' + sel.to + ' · last seen alive ' + sel.seen : '',
+      selEpitaph: canRaise ? sel.from + ' – ' + sel.to + ' · copy from ' + sel.seen : '',
       selCanRaise: canRaise && !raised, selRaised: canRaise && raised,
-      selSnap: canRaise ? 'https://web.archive.org/web/' + sel.to + '/' + sel.url : '',
+      selSnap: canRaise ? 'https://web.archive.org/web/' + sel.ts + '/' + sel.url : '',
+      selAll: canRaise ? 'https://web.archive.org/web/*/' + sel.url : '',
       resurrect: this.resurrect,
       scan: this.scan,
       doc: s.doc,
@@ -349,7 +456,7 @@ class Component extends DCLogic {
       rows: shown.map((l, i) => ({
         ...l, label: LABEL[l.v],
         hasSnap: !!l.seen, noSnap: !l.seen,
-        snap: 'https://web.archive.org/web/' + l.to + '/' + l.url,
+        snap: 'https://web.archive.org/web/' + l.ts + '/' + l.url,
         patch: !s.skip[i],
         patchLabel: 'Patch ' + l.host + ' in the download',
         toggle: () => this.setState({ skip: { ...s.skip, [i]: !s.skip[i] } })

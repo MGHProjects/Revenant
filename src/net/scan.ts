@@ -96,6 +96,7 @@ export async function* scan(
   kind: InputKind,
   fetcher: Fetcher,
   wayback: Wayback,
+  githubToken?: string,
 ): AsyncGenerator<ScanEvent> {
   // ---- Step 1: Resolve input ----
 
@@ -121,7 +122,7 @@ export async function* scan(
     effectiveKind = detectKind(source);
   } else {
     // kind === 'repo': shared GitHub README resolver (same one the Worker uses).
-    const result = await resolveRepoReadme(input.trim());
+    const result = await resolveRepoReadme(input.trim(), undefined, githubToken);
     if (!result.ok) {
       yield { type: 'error', message: result.message };
       return;

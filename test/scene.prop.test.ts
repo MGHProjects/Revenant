@@ -16,7 +16,7 @@ import { lifespanHeight } from '../web/scene.js';
 
 // Property 11 runs the real `lifespanHeight`: an epitaph spanning y whole years.
 const tombstoneHeight = (y: number): number =>
-  lifespanHeight({ first: '2000-01-01', last: `${2000 + y}-12-31` });
+  lifespanHeight({ first: '2000-01-01', last: `${2000 + y}-12-31`, copy: `${2000 + y}-12-31` });
 
 /** Non-negative integers; range 0–200 covers every meaningful lifespan. */
 const arbLifespan = (): fc.Arbitrary<number> =>

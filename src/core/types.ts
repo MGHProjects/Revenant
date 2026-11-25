@@ -32,21 +32,27 @@ export interface Capture {
   length: number | undefined;
 }
 
-/** First and last 14-digit timestamps of the longest continuous life of a URL. */
+/** First, last and copy 14-digit timestamps of the longest continuous life of a URL. */
 export interface ChosenLife {
   first: string;
   last: string;
+  /** The capture to open: stepped back from last, see core/lives.ts. */
+  copy: string;
 }
 
-/** First and last Wayback Machine capture dates as ISO date strings (YYYY-MM-DD). */
+/** Wayback Machine capture dates as ISO date strings (YYYY-MM-DD). */
 export interface Epitaph {
+  /** First capture of the life. */
   first: string;
+  /** Last capture of the life. */
   last: string;
+  /** The capture the resurrection opens: stepped back from last, because pages decay before they die. */
+  copy: string;
 }
 
 /**
  * What the archive said about a URL.
- * - Epitaph: at least one 200 capture exists; first and last dates.
+ * - Epitaph: at least one 200 capture exists; first, last and copy dates.
  * - 'none': the archive answered and holds no 200 capture (never archived).
  * - 'unavailable': the archive could not be reached (connection error, HTTP error, bad reply, timeout, second 429).
  */
@@ -59,6 +65,13 @@ export interface Judgement {
   reason: string;
   epitaph?: EpitaphResult;
   resurrection?: string;
+  /**
+   * Set when the archive could not be reached in a way that changed this result: a dead or
+   * possessed link whose epitaph is 'unavailable', or a cross-domain 2xx judged restless because
+   * the snapshot was 'unavailable'. Never set for restless links caused by the site itself.
+   * Asking again may give a different answer.
+   */
+  archiveUnavailable?: true;
 }
 
 /**
@@ -87,7 +100,7 @@ export interface Wayback {
    */
   getArchive(url: string): Promise<ArchiveAnswer>;
   /**
-   * Visible text of the last good capture. Pass the `archive` answer already fetched in this
+   * Visible text of the copy capture (the one the resurrection opens). Pass the `archive` answer already fetched in this
    * judgement so the CDX is not requested a second time.
    */
   getSnapshotText(url: string, archive?: ArchiveAnswer): Promise<SnapshotResult>;
@@ -99,7 +112,7 @@ export interface Wayback {
 }
 
 /**
- * What the archive said about the body of the last good capture of a URL.
+ * What the archive said about the body of the copy capture of a URL.
  * Same semantics as `EpitaphResult`:
  * - 'text': the capture was fetched; `text` is its visible text.
  * - 'none': the archive answered and holds no usable 200 capture (empty CDX, or an empty body).
@@ -130,6 +143,7 @@ export interface CliOutput {
     reason: string;
     resurrection?: string;
     epitaph?: EpitaphResult;
+    archiveUnavailable?: true;
     spans: Array<{ start: number; end: number }>;
   }>;
 }

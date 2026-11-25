@@ -3,6 +3,9 @@ import type { Capture, ChosenLife } from './types.js';
 /** A gap of more than this many calendar months between consecutive captures starts a new life. */
 const MAX_GAP_MONTHS = 12;
 
+/** The copy is stepped back from the life's last capture by at most this many months. */
+const MAX_MARGIN_MONTHS = 12;
+
 /** Calendar month index from the yyyymm part of a 14-digit timestamp. */
 function monthIndex(timestamp: string): number {
   return Number(timestamp.slice(0, 4)) * 12 + Number(timestamp.slice(4, 6));
@@ -15,14 +18,16 @@ function median(values: number[]): number {
 }
 
 /**
- * Pick the capture range that represents the longest continuous life of a URL.
+ * Pick the longest continuous life of a URL and the capture to open from it.
  *
  * Captures are sorted by timestamp inside, so input order does not matter.
  * A new life starts wherever more than 12 calendar months separate two consecutive captures.
  * The longest life by span (months from first to last capture) wins; a tie goes to the earliest.
- * `first` is the life's first capture. `last` is the life's last capture whose length is at
- * least half the life's median known length; if none qualifies (or no length is known), the
- * life's last capture. Returns undefined for an empty input.
+ * `first` and `last` are the life's first and last captures (the stone shows the whole life).
+ * `copy` is the capture to open. Pages decay before they die, so it is stepped back from the end:
+ * margin = min(12, floor(span / 4)) months; candidates are the life's captures in or before the
+ * month (last month - margin); copy = the last candidate whose length is at least half the median
+ * candidate length, else the last candidate. Returns undefined for an empty input.
  */
 export function chooseLife(captures: readonly Capture[]): ChosenLife | undefined {
   if (captures.length === 0) return undefined;
@@ -51,19 +56,23 @@ export function chooseLife(captures: readonly Capture[]): ChosenLife | undefined
     if (span(life) > span(best)) best = life; // strict: ties keep the earliest
   }
 
-  const known = best.flatMap((c) => (c.length === undefined ? [] : [c.length]));
-  let last = best[best.length - 1]!.timestamp;
+  const lastCapture = best[best.length - 1]!;
+  const margin = Math.min(MAX_MARGIN_MONTHS, Math.floor(span(best) / 4));
+  const cutoff = monthIndex(lastCapture.timestamp) - margin;
+  const candidates = best.filter((c) => monthIndex(c.timestamp) <= cutoff);
+
+  const known = candidates.flatMap((c) => (c.length === undefined ? [] : [c.length]));
+  let copy = candidates[candidates.length - 1]!.timestamp;
   if (known.length > 0) {
     const threshold = median(known) / 2;
-    for (let i = best.length - 1; i >= 0; i--) {
-      const len = best[i]!.length;
+    for (let i = candidates.length - 1; i >= 0; i--) {
+      const len = candidates[i]!.length;
       if (len !== undefined && len >= threshold) {
-        last = best[i]!.timestamp;
+        copy = candidates[i]!.timestamp;
         break;
       }
     }
   }
 
-  return { first: best[0]!.timestamp, last };
+  return { first: best[0]!.timestamp, last: lastCapture.timestamp, copy };
 }
-

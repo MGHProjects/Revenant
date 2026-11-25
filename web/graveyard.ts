@@ -21,7 +21,9 @@ import {
   toGraveView,
   type GraveView,
 } from './scene.js';
+import { chunk, mergeJudgement, retryIndexes } from './ask-again.js';
 import { NARROW_MAX_WIDTH, balancedColumns, maxColumns } from './yard-columns.js';
+import { isRepoSlug, parseScanParams, searchAfterScan, type ScanOrigin } from './scan-address.js';
 
 const LINK_CAP = 200;
 const BATCH_SIZE = 3;
@@ -44,6 +46,8 @@ const downloadBtn = $<HTMLButtonElement>('download');
 const soundBtn = $<HTMLButtonElement>('sound');
 const rowsEl = $('rows');
 const sampleScanBtn = $<HTMLButtonElement>('scan-sample');
+const copyBtn = $<HTMLButtonElement>('copy-link');
+const copyFallback = $<HTMLInputElement>('copy-fallback');
 
 // ---------------------------------------------------------------------------
 // State
@@ -56,6 +60,10 @@ let selected = -1;
 let currentSource = '';
 let currentKind: Kind = 'markdown';
 let scanning = false;
+/** Bumped by every new scan: answers that arrive for an older generation are discarded. */
+let scanGen = 0;
+/** Document positions with an Ask again request in flight. */
+const asking = new Set<number>();
 /** Links whose Patch checkbox is unchecked: passed to patch() as `excluded`. */
 const excluded = new Set<string>();
 
@@ -113,7 +121,10 @@ function layoutYard(): void {
   for (const b of plotButtons()) {
     const host = b.querySelector<HTMLElement>('.host');
     if (!host) continue;
-    if (host.scrollHeight > host.clientHeight + 1) b.title = host.textContent ?? '';
+    const cut =
+      host.scrollHeight > host.clientHeight + 1 ||
+      Array.from(host.querySelectorAll<HTMLElement>('.hpart')).some((p) => p.scrollWidth > p.clientWidth + 1);
+    if (cut) b.title = host.textContent ?? '';
     else b.removeAttribute('title');
   }
 }
@@ -124,6 +135,13 @@ function scheduleLayout(): void {
 }
 
 new ResizeObserver(scheduleLayout).observe(yard);
+
+// The inscription band's height varies with its content; scroll-padding-bottom follows it so a
+// focused plot is never hidden under the stuck band (0 while the band is hidden).
+const inscriptionBand = $('inscription');
+new ResizeObserver(() => {
+  document.documentElement.style.setProperty('--ins-h', `${inscriptionBand.offsetHeight}px`);
+}).observe(inscriptionBand);
 narrowQuery.addEventListener('change', scheduleLayout);
 
 /** Insert at the link's document position, whatever order batches come back in. */
@@ -141,6 +159,36 @@ function addPlot(v: GraveView): void {
   }
 }
 
+/** Draws the inscription and keeps the Ask again button in its busy state while a request runs. */
+function renderInscription(v: GraveView | undefined): void {
+  showInscription(v);
+  if (!v || !asking.has(v.index)) return;
+  const btn = document.getElementById('ask-again') as HTMLButtonElement | null;
+  if (btn) {
+    btn.disabled = true;
+    btn.textContent = 'Asking…';
+  }
+}
+
+let revealFrame = 0;
+
+/**
+ * Scrolls the selected plot, labels and ground line included, above the stuck inscription band.
+ * Runs in a frame after the inscription redraw so the band has its final height, and sets --ins-h
+ * itself because the ResizeObserver fires after requestAnimationFrame callbacks. The plot is looked
+ * up again then, since Ask again may have replaced the element.
+ */
+function revealSelected(): void {
+  if (revealFrame) cancelAnimationFrame(revealFrame);
+  revealFrame = requestAnimationFrame(() => {
+    revealFrame = 0;
+    const plot = plotAt(selected);
+    if (!plot) return;
+    document.documentElement.style.setProperty('--ins-h', `${inscriptionBand.offsetHeight}px`);
+    plot.scrollIntoView({ block: 'nearest', inline: 'nearest', behavior: 'auto' });
+  });
+}
+
 function select(i: number, focus = false): void {
   const v = views[i];
   if (!v) return;
@@ -151,7 +199,8 @@ function select(i: number, focus = false): void {
     b.setAttribute('aria-pressed', String(on));
     if (on && focus) b.focus();
   }
-  showInscription(v);
+  renderInscription(v);
+  revealSelected();
 }
 
 function resurrect(i: number, focusLink = false): void {
@@ -285,8 +334,6 @@ function looksLikeHtml(text: string): boolean {
   return /^\s*(<!doctype html|<[a-z][a-z0-9-]*(\s|>|\/>))/i.test(text);
 }
 
-const isRepoSlug = (s: string): boolean => /^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/.test(s);
-
 async function resolveAddress(input: string): Promise<{ source: string; kind: Kind } | { error: string }> {
   const kind = isRepoSlug(input) ? 'repo' : 'url';
   let res: Response;
@@ -354,6 +401,7 @@ function resetScene(): void {
   judgements = [];
   selected = -1;
   excluded.clear();
+  asking.clear();
   showInscription(undefined);
   $('ledger').hidden = true;
   rowsEl.replaceChildren();
@@ -362,14 +410,17 @@ function resetScene(): void {
   renderTally();
 }
 
-async function scan(): Promise<void> {
+async function scan(fromSample = false): Promise<void> {
   if (scanning) return;
   scanBtn.disabled = true;
   scanning = true;
+  scanGen++;
   clearError();
   resetScene();
+  copyBtn.hidden = true;
+  copyFallback.hidden = true;
   try {
-    await runScan();
+    await runScan(fromSample);
   } finally {
     scanning = false;
     scanBtn.disabled = false;
@@ -385,11 +436,22 @@ function scanSample(): void {
   address.value = '';
   // the button is about to hide: park focus on the status heading so it is not lost
   if (document.activeElement === sampleScanBtn) statusEl.focus();
-  void scan();
+  void scan(true);
 }
 
-async function runScan(): Promise<void> {
-  const addr = address.value.trim();
+/**
+ * Writes the scan's address into the query string (replaceState: no history entry) and shows
+ * Copy link when the result has one. A textarea scan clears the scan parameters instead.
+ */
+function writeAddress(origin: ScanOrigin): void {
+  const { search, shareable } = searchAfterScan(location.search, origin);
+  if (search !== location.search) history.replaceState(history.state, '', location.pathname + search + location.hash);
+  copyBtn.hidden = !shareable;
+  copyFallback.hidden = true;
+}
+
+async function runScan(fromSample: boolean): Promise<void> {
+  const addr = fromSample ? '' : address.value.trim();
   let text: string;
   let kind: Kind;
   if (addr) {
@@ -402,7 +464,9 @@ async function runScan(): Promise<void> {
     }
     text = resolved.source;
     kind = resolved.kind;
+    writeAddress({ kind: 'address', address: addr });
   } else {
+    writeAddress(fromSample ? { kind: 'sample' } : { kind: 'text' });
     text = source.value;
     kind = looksLikeHtml(text) ? 'html' : 'markdown';
   }
@@ -415,6 +479,7 @@ async function runScan(): Promise<void> {
     showError('No links found. Only http and https links are scanned.');
     return;
   }
+  const gen = scanGen;
   const links: Link[] = found.slice(0, LINK_CAP);
   const total = links.length;
   const capNote = found.length > LINK_CAP ? ` A scan covers up to ${LINK_CAP}.` : '';
@@ -461,6 +526,8 @@ async function runScan(): Promise<void> {
   });
   await runPool(tasks, MAX_IN_FLIGHT);
   await reveal;
+  await retryArchive(gen);
+  if (gen !== scanGen) return;
 
   const judged = total - failed;
   statusEl.textContent = found.length > LINK_CAP
@@ -468,6 +535,96 @@ async function runScan(): Promise<void> {
     : failed ? `${judged} of ${total} ${plural(total, 'link', 'links')} judged.` : `${total} ${plural(total, 'link', 'links')} judged.`;
   selectDefault();
   bell();
+}
+
+// ---------------------------------------------------------------------------
+// Ask again
+// ---------------------------------------------------------------------------
+
+/** Swap one judgement for a fresh answer: plot, ledger row, tally, patch note and inscription. */
+function applyReplacement(index: number, fresh: Judgement): void {
+  const old = views[index];
+  if (!old) return;
+  const merged = mergeJudgement(judgements, index, fresh, excluded);
+  judgements = merged.judgements;
+  const full = judgements[index]!;
+  const view = toGraveView(full, index);
+  views[index] = view;
+
+  const oldPlot = plotAt(index);
+  const hadFocus = !!oldPlot && oldPlot.contains(document.activeElement);
+  if (oldPlot) {
+    const li = createPlot(view, 0);
+    oldPlot.parentElement?.replaceWith(li);
+    scheduleLayout();
+  }
+  const oldRow = Array.from(rowsEl.querySelectorAll<HTMLTableRowElement>('tr')).find(r => r.dataset['i'] === String(index));
+  oldRow?.replaceWith(createRow(view));
+
+  // roving tabindex and aria-pressed come back through select(); the inscription redraws if selected
+  if (selected === index) select(index, hadFocus);
+  else if (oldPlot) {
+    const b = plotAt(index);
+    if (b) b.tabIndex = oldPlot.tabIndex;
+    if (b && hadFocus) b.focus();
+  }
+  renderTally();
+  renderPatchNote();
+}
+
+function askAnnouncement(v: GraveView): string {
+  return `${v.host} is now ${LABEL[v.verdict].toLowerCase()}. ${count()}.`;
+}
+
+async function askAgain(index: number): Promise<void> {
+  const v = views[index];
+  if (!v || asking.has(index)) return;
+  const gen = scanGen;
+  const buttonHadFocus = document.activeElement?.id === 'ask-again';
+  asking.add(index);
+  if (selected === index) renderInscription(v);
+  live.textContent = `Asking the archive again about ${v.host}.`;
+  const result = await judgeBatch([v.url]);
+  if (gen !== scanGen) return;
+  asking.delete(index);
+  const fresh = result.ok ? result.judgements[0] : undefined;
+  if (fresh) {
+    applyReplacement(index, fresh);
+    const now = views[index]!;
+    live.textContent = askAnnouncement(now);
+  } else {
+    const detail = result.ok ? 'the server sent an unexpected reply' : result.detail;
+    showError(`1 link could not be checked (${detail}). Its old answer stays.`);
+    if (selected === index) renderInscription(views[index]);
+  }
+  if (buttonHadFocus && selected === index) {
+    const btn = document.getElementById('ask-again');
+    if (btn) btn.focus();
+    else plotAt(index)?.focus();
+  }
+}
+
+/** Once per scan: ask the archive again about every link whose lookup failed. */
+async function retryArchive(gen: number): Promise<void> {
+  const indexes = retryIndexes(judgements).filter(i => !asking.has(i));
+  if (!indexes.length) return;
+  statusEl.textContent = `Asking the archive again for ${indexes.length} ${plural(indexes.length, 'link', 'links')}.`;
+  indexes.forEach(i => asking.add(i));
+  if (selected >= 0 && asking.has(selected)) renderInscription(views[selected]);
+  const tasks = chunk(indexes, BATCH_SIZE).map(batch => async (): Promise<void> => {
+    const result = await judgeBatch(batch.map(i => views[i]!.url));
+    if (gen !== scanGen) return;
+    batch.forEach((i, n) => {
+      asking.delete(i);
+      const fresh = result.ok ? result.judgements[n] : undefined;
+      if (fresh) applyReplacement(i, fresh);
+    });
+  });
+  await runPool(tasks, MAX_IN_FLIGHT);
+  if (gen !== scanGen) return;
+  indexes.forEach(i => asking.delete(i));
+  if (selected >= 0) renderInscription(views[selected]);
+  live.textContent = `Asked the archive again for ${indexes.length} ${plural(indexes.length, 'link', 'links')}. ${count()}.`;
 }
 
 // ---------------------------------------------------------------------------
@@ -528,7 +685,38 @@ $('doc').addEventListener('submit', e => {
 });
 
 sampleScanBtn.addEventListener('click', scanSample);
-if (new URLSearchParams(location.search).get('sample') === '1') scanSample();
+
+// Copy link: the address bar already holds this scan's link (writeAddress).
+let copyTimer = 0;
+function copied(message: string, label: string): void {
+  live.textContent = message;
+  copyBtn.textContent = label;
+  clearTimeout(copyTimer);
+  copyTimer = window.setTimeout(() => { copyBtn.textContent = 'Copy link'; }, 2000);
+}
+
+copyBtn.addEventListener('click', () => {
+  const href = location.href;
+  const fallback = (): void => {
+    copyFallback.value = href;
+    copyFallback.hidden = false;
+    copyFallback.focus();
+    copyFallback.select();
+    copied('Link selected. Press Ctrl+C to copy it.', 'Link selected');
+  };
+  if (!navigator.clipboard) return fallback();
+  navigator.clipboard.writeText(href).then(() => copied('Link copied.', 'Link copied.'), fallback);
+});
+
+// A link with ?sample=1, ?repo= or ?url= scans on load. Invalid values show the error and do not scan.
+{
+  const param = parseScanParams(location.search);
+  if (param.kind === 'sample') scanSample();
+  else if (param.kind === 'repo' || param.kind === 'url') {
+    address.value = param.value;
+    void scan();
+  } else if (param.kind === 'invalid') showError(param.message);
+}
 
 $('sample').addEventListener('click', () => {
   source.value = sample;
@@ -574,6 +762,8 @@ yard.addEventListener('keydown', e => {
 });
 
 $('ins-action').addEventListener('click', e => {
-  if ((e.target as HTMLElement).id === 'resurrect') resurrect(selected, true);
+  const id = (e.target as HTMLElement).id;
+  if (id === 'resurrect') resurrect(selected, true);
+  else if (id === 'ask-again') void askAgain(selected);
 });
 downloadBtn.addEventListener('click', download);

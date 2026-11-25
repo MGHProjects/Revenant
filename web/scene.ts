@@ -9,6 +9,8 @@
 
 import type { EpitaphResult, Judgement, Verdict } from '../src/core/types.js';
 import { archiveNote } from '../src/core/archive-note.js';
+import { canAskAgain } from './ask-again.js';
+import { hostParts } from './host-parts.js';
 
 // ---------------------------------------------------------------------------
 // Pure helpers
@@ -75,6 +77,8 @@ export interface GraveView {
   note?: string;
   height: number;
   raised: boolean;
+  /** The archive could not be reached for this link: its inscription offers Ask again. */
+  archiveUnavailable?: true;
 }
 
 export function toGraveView(j: Judgement, index: number): GraveView {
@@ -94,7 +98,7 @@ export function toGraveView(j: Judgement, index: number): GraveView {
     if (first !== undefined && last !== undefined) {
       view.first = first;
       view.last = last;
-      const seen = formatSeen(e.last);
+      const seen = formatSeen(e.copy);
       if (seen) view.seen = seen;
     }
   }
@@ -102,13 +106,14 @@ export function toGraveView(j: Judgement, index: number): GraveView {
   if (snap) view.snap = snap;
   const note = archiveNote(j);
   if (note) view.note = note;
+  if (j.archiveUnavailable) view.archiveUnavailable = true;
   return view;
 }
 
-/** "2009 – 2017 · last seen alive 14 Mar 2017", or undefined when the link has no dates. */
+/** "2009 – 2017 · copy from 14 Mar 2016", or undefined when the link has no dates. */
 export function epitaphText(v: GraveView): string | undefined {
   if (v.first === undefined || v.last === undefined) return undefined;
-  return `${v.first} – ${v.last}${v.seen ? ` · last seen alive ${v.seen}` : ''}`;
+  return `${v.first} – ${v.last}${v.seen ? ` · copy from ${v.seen}` : ''}`;
 }
 
 /** What the "Archived copy" cell and the inscription say when there is no snapshot link. */
@@ -167,6 +172,23 @@ function createShape(v: GraveView): Node {
 
 const plotLabel = (v: GraveView): string => LABEL[v.verdict] + (v.raised ? ', raised' : '');
 
+/**
+ * The host label: one inline-block span per part, a <wbr> after every dot except the last part.
+ * Built from text nodes only (the host comes from an untrusted document). <wbr> adds no text,
+ * so the accessible name and copy/paste hold the host exactly once.
+ */
+function hostLabel(host: string): HTMLElement {
+  const label = el('span', 'host');
+  const parts = hostParts(host);
+  parts.forEach((part, i) => {
+    const span = el('span', 'hpart');
+    span.append(document.createTextNode(part));
+    label.append(span);
+    if (i < parts.length - 1) label.append(document.createElement('wbr'));
+  });
+  return label;
+}
+
 /** `delay` is the rise delay in ms: the link's position within its batch times 110. */
 export function createPlot(v: GraveView, delay: number): HTMLLIElement {
   const li = el('li');
@@ -182,7 +204,7 @@ export function createPlot(v: GraveView, delay: number): HTMLLIElement {
   riser.append(createShape(v));
   figure.append(riser);
 
-  btn.append(figure, el('span', 'host', v.host), el('span', 'verdict', plotLabel(v)));
+  btn.append(figure, hostLabel(v.host), el('span', 'verdict', plotLabel(v)));
   li.append(btn);
   return li;
 }
@@ -249,6 +271,18 @@ export function showInscription(v: GraveView | undefined): HTMLAnchorElement | u
   note.textContent = noteText ?? '';
 
   action.replaceChildren();
+  let link: HTMLAnchorElement | undefined;
+  if (v.snap) link = drawSnapshotActions(action, v);
+  if (canAskAgain(v)) {
+    const ask = el('button', 'btn', 'Ask again');
+    ask.type = 'button';
+    ask.id = 'ask-again';
+    action.append(ask);
+  }
+  return link;
+}
+
+function drawSnapshotActions(action: HTMLElement, v: GraveView): HTMLAnchorElement | undefined {
   if (!v.snap) return undefined;
   if (v.raised) {
     const a = el('a', 'btn go fade', 'Open the archived page');

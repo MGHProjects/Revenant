@@ -58,7 +58,7 @@ const DOCUMENT = [
 // Fake Wayback
 // ---------------------------------------------------------------------------
 
-const EPITAPH: Epitaph = { first: '2015-01-01', last: '2020-01-01' };
+const EPITAPH: Epitaph = { first: '2015-01-01', last: '2020-01-01', copy: '2020-01-01' };
 const RESURRECTION_URL = 'https://web.archive.org/web/20200101000000/http://possessed.example.com/';
 
 // Text with zero word overlap with the live page text below.

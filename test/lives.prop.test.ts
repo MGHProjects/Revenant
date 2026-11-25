@@ -85,30 +85,52 @@ describe('Property 12: chosen life', () => {
     );
   });
 
-  it('last has length >= median/2, or is the life\'s last capture when none qualifies', () => {
+  it('first and last are the life\'s first and last captures; first <= copy <= last', () => {
     fc.assert(
       fc.property(captures, (caps) => {
         const r = chooseLife(caps)!;
         const life = splitLives(caps).find((l) => l[0]!.timestamp === r.first)!;
-        const known = life.flatMap((c) => (c.length === undefined ? [] : [c.length]));
-        const lifeLast = life[life.length - 1]!.timestamp;
-        if (known.length === 0) {
-          expect(r.last).toBe(lifeLast);
-          return;
-        }
-        const threshold = median(known) / 2;
-        const qualifying = life.filter((c) => c.length !== undefined && c.length >= threshold);
-        if (qualifying.length === 0) {
-          expect(r.last).toBe(lifeLast);
-        } else {
-          // the chosen capture qualifies and nothing qualifying comes later
-          expect(r.last).toBe(qualifying[qualifying.length - 1]!.timestamp);
-        }
+        expect(r.last).toBe(life[life.length - 1]!.timestamp);
+        expect(life.some((c) => c.timestamp === r.copy)).toBe(true);
+        expect(r.first <= r.copy && r.copy <= r.last).toBe(true);
       }),
       { numRuns: 200 },
     );
   });
 
+  it('a one-capture life returns itself as first, last and copy', () => {
+    fc.assert(
+      fc.property(capture, (c) => {
+        expect(chooseLife([c])).toEqual({ first: c.timestamp, last: c.timestamp, copy: c.timestamp });
+      }),
+      { numRuns: 100 },
+    );
+  });
+
+  it('margin <= 12 and <= span/4; copy month <= cutoff month; copy is the last candidate with length >= median/2, else the last candidate', () => {
+    fc.assert(
+      fc.property(captures, (caps) => {
+        const r = chooseLife(caps)!;
+        const life = splitLives(caps).find((l) => l[0]!.timestamp === r.first)!;
+        const margin = Math.min(12, Math.floor(span(life) / 4));
+        expect(margin).toBeLessThanOrEqual(12);
+        expect(margin).toBeLessThanOrEqual(span(life) / 4);
+        const cutoff = month(r.last) - margin;
+        expect(month(r.copy)).toBeLessThanOrEqual(cutoff);
+        const candidates = life.filter((c) => month(c.timestamp) <= cutoff);
+        const known = candidates.flatMap((c) => (c.length === undefined ? [] : [c.length]));
+        const lastCandidate = candidates[candidates.length - 1]!.timestamp;
+        if (known.length === 0) {
+          expect(r.copy).toBe(lastCandidate);
+          return;
+        }
+        const threshold = median(known) / 2;
+        const qualifying = candidates.filter((c) => c.length !== undefined && c.length >= threshold);
+        expect(r.copy).toBe(qualifying.length === 0 ? lastCandidate : qualifying[qualifying.length - 1]!.timestamp);
+      }),
+      { numRuns: 200 },
+    );
+  });
   it('input order does not matter (sorted inside)', () => {
     fc.assert(
       fc.property(captures, fc.nat(), (caps, seed) => {

@@ -120,6 +120,8 @@ export async function judgeLink(
 
   const { verdict, reason } = classify(judged, url, snapshot);
   const judgement: Judgement = { link, verdict, reason };
+  // The one place the flag is set, from structured values only (never from reason text).
+  if (verdict === 'restless' && snapshot?.status === 'unavailable') judgement.archiveUnavailable = true;
 
   if (verdict === 'dead' || verdict === 'possessed') {
     // One CDX answer yields both, or neither. Reused if the cross-domain check already asked.
@@ -129,6 +131,7 @@ export async function judgeLink(
       judgement.resurrection = answer.resurrection;
     } else {
       judgement.epitaph = typeof answer.epitaph === 'object' ? 'unavailable' : answer.epitaph;
+      if (judgement.epitaph === 'unavailable') judgement.archiveUnavailable = true;
     }
   }
 

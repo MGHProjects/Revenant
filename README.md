@@ -6,7 +6,9 @@ Built for [Kiroween 2026](https://kiroween.devpost.com/), category: Costume Cont
 
 ## What it is
 
-38% of web pages from 2013 no longer exist. Some links are worse than dead: the URL still
+Pew Research Center found that 38% of web pages that existed in 2013 were no longer accessible
+a decade later ([When Online Content Disappears](https://www.pewresearch.org/data-labs/2024/05/17/when-online-content-disappears/),
+17 May 2024). Some links are worse than dead: the URL still
 answers, but the domain was sold and now serves something else. A normal link checker reports
 those as fine. Revenant gives every link in a Markdown or HTML document one verdict, shows when
 it died, and replaces it with its closest archived snapshot from the Wayback Machine. The same
@@ -14,12 +16,12 @@ engine runs as a web app, as a CLI for CI, and as an MCP server for AI agents.
 
 | Verdict | Shape on the page | Meaning |
 |---|---|---|
-| `alive` | Lit window | Responds, and the content still matches its archived self. |
-| `dead` | Tombstone | Gone: DNS failure, 404/410, or persistent 5xx. |
-| `possessed` | Green zombie hand | Responds, but now redirects to another domain whose content is nothing like the archived page. |
-| `restless` | Fog patch | Cannot tell (401, 403, 429, timeout, archive unreachable). |
+| `alive` | Lit window | Answers 2xx. Content is compared with the archive only after a redirect to another registrable domain. |
+| `dead` | Tombstone | Gone: a confirmed DNS failure (NXDOMAIN or no A/AAAA record) or a 404/410. |
+| `possessed` | Green zombie hand | A cross-domain redirect whose content is under 20% like the chosen archive copy. |
+| `restless` | Fog patch | Cannot tell: 401 (needs a login), 403 and 429, 5xx twice, timeout, other connection errors, blocked addresses, other statuses, and an archive that could not be reached for the comparison. |
 
-Revenant never cries wolf. When it is not sure, the verdict is `restless`, not `dead`.
+A 5xx is never `dead`. Revenant never cries wolf: when it is not sure, the verdict is `restless`.
 
 - **Web:** paste a document, a page address or `owner/repo`. Links rise as a graveyard. Download the patched file.
 - **CLI:** `revenant README.md --fix`. Exits 1 when links are dead or possessed, so CI can fail on rot.
@@ -27,8 +29,20 @@ Revenant never cries wolf. When it is not sure, the verdict is `restless`, not `
 
 ## Try it
 
-Open <https://revenant.mgh-web.workers.dev>, press **Load the sample**, then **Scan the document**.
+Open <https://revenant.mgh-web.workers.dev> and press **Scan the sample**. Or press **Load the
+sample**, then **Scan the document**. Or open a link that scans on load:
+
+- <https://revenant.mgh-web.workers.dev/?sample=1>
+- <https://revenant.mgh-web.workers.dev/?repo=sindresorhus/awesome>
+- <https://revenant.mgh-web.workers.dev/?url=http://info.cern.ch/hypertext/WWW/TheProject.html>
+
 The sample is [`samples/haunted-readme.md`](samples/haunted-readme.md): nine links with every verdict.
+
+In the graveyard:
+
+- Select a grave to read its inscription. **See every capture** opens the full Wayback list for that link.
+- **Ask again** re-checks one link, for example when the archive was unreachable the first time.
+- **Copy link** copies the address of this scan, so someone else can open the same graveyard.
 
 ## Screenshots
 
@@ -44,7 +58,7 @@ The ledger below the scene holds the same data as a plain table, with the archiv
 
 ![Ledger table listing nine links with verdict, reason, archived copy date and patch checkbox](docs/screenshots/ledger-1440.png)
 
-These screenshots come from a local run on the sample document, taken on 18 Nov 2026.
+These screenshots come from the production site (https://revenant.mgh-web.workers.dev), on the sample document, taken on {date}.
 
 ## CLI
 
@@ -70,9 +84,9 @@ One line per link that is not alive: `[verdict] url — reason (archived copy)`.
 ```console
 $ revenant samples/haunted-readme.md
 [dead] http://www.freebase.com/ — Answers 404. (https://web.archive.org/web/20160501004947/http://www.freebase.com/)
-[dead] http://www.dmoz.org/ — The domain no longer resolves. (https://web.archive.org/web/20250305234014/http://www.dmoz.org/)
-[possessed] http://www.geocities.com/SiliconValley/ — Redirects to yahoo.com; 0% like the archived page. (https://web.archive.org/web/19991009015113/http://www.geocities.com/SiliconValley/)
-[restless] https://api.github.com/user — Answers 401 to robots. Not judged. (—)
+[dead] http://www.dmoz.org/ — The domain no longer resolves. (https://web.archive.org/web/20170301000315/http://www.dmoz.org/)
+[possessed] http://www.geocities.com/SiliconValley/ — Redirects to yahoo.com; 0% like the archived page. (https://web.archive.org/web/19990202115713/http://www.geocities.com/SiliconValley/)
+[restless] https://api.github.com/user — Answers 401: needs a login. Not judged. (—)
 9 links: 2 alive, 3 dead, 3 possessed, 1 restless
 ```
 
@@ -114,7 +128,7 @@ excerpt for two of the nine sample links:
       "url": "http://www.geocities.com/SiliconValley/",
       "verdict": "possessed",
       "reason": "Redirects to yahoo.com; 0% like the archived page.",
-      "resurrection": "https://web.archive.org/web/19991009015113/http://www.geocities.com/SiliconValley/",
+      "resurrection": "https://web.archive.org/web/19990202115713/http://www.geocities.com/SiliconValley/",
       "epitaph": { "first": "1996-12-21", "last": "1999-10-09" },
       "spans": [{ "start": 774, "end": 813 }]
     }
@@ -151,7 +165,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/checkout@v4
         with:
-          repository: <owner>/Revenant
+          repository: MGHProjects/Revenant
           path: .revenant
       - uses: actions/setup-node@v4
         with:
@@ -162,7 +176,6 @@ jobs:
 ```
 
 The last step fails the job (exit 1) when README.md has a dead or possessed link.
-Replace `<owner>` with the account that hosts your copy of Revenant.
 
 ## MCP server
 
@@ -245,10 +258,12 @@ Layout:
 
 ```
 src/core     pure engine: extract, classify, similarity, patch, guard. No network, no clock.
-src/net      the only code that touches the network: fetcher, Wayback client, scan loop
+src/core/lives.ts       picks a URL's longest continuous life and the copy to open
+src/net      the only code that touches the network: fetcher, Wayback client, judge-link.ts
+             (one judgement per link), github-readme.ts (owner/repo input), scan loop
 src/worker   Hono app: POST /api/scan, POST /api/resolve, static assets
-src/cli      revenant command
-src/mcp      stdio MCP server
+src/cli      main.ts (entry) and run.ts (the revenant command)
+src/mcp      main.ts (entry) and server.ts (stdio MCP server)
 web          Vite app: the graveyard
 ```
 
@@ -258,13 +273,14 @@ Imports go one way: `worker`, `cli`, `mcp` and `web` use `net`, and `net` uses `
 ## Limits worth knowing
 
 - `possessed` is only detected when the link redirects to another registrable domain. A hijacked domain that serves new content at the same address is reported `alive`.
+- Pages decay before they die, so Revenant opens a copy from up to a year before the last capture; See every capture shows the rest.
 - A scan covers at most 200 links. The web app says so when the cap is hit.
 - The Worker runs on the Cloudflare free plan, so `POST /api/scan` accepts at most 3 URLs per request. The web app sends batches of 3, two at a time.
 - In the Worker, text similarity compares only the first 64 KB of visible text on each side. The CLI and MCP server run on Node and use the same core.
 - Response bodies are read up to 512 KB. Outbound requests have an 8 s timeout and follow at most 5 redirects.
 - The Worker keeps Wayback answers for 24 h in memory only. It does not use the Cache API, because those calls count toward the free plan's 50 subrequests per request. The memory lives inside one Worker isolate, so a later request can miss the cache and ask the archive again.
 - The Wayback Machine can throttle the Worker (HTTP 429) or time out under bursts of requests. A link that needed the archive for comparison is then `restless`, not `dead` or `possessed`. Repeated back-to-back CLI runs can show more `restless` links than a single run.
-- For `owner/repo` input, Revenant reads the README through the GitHub API. When GitHub rate-limits the request, it falls back to `raw.githubusercontent.com` (`README.md` on the default branch). If that fails too, the web app asks you to paste the document.
+- For `owner/repo` input, Revenant first tries `raw.githubusercontent.com` on the default branch for `README.md`, `readme.md`, `README`, `Readme.md` and `README.markdown`, which GitHub does not rate-limit. Only if none exists does it call the GitHub API (for READMEs with another name or in `docs/`). The unauthenticated API allows 60 requests per hour per IP, so set `GITHUB_TOKEN` in the CLI environment to raise that; the token is sent to the API only. If GitHub still rate-limits the request, the web app asks you to paste the document.
 - Outbound requests are limited to http and https hosts by name. IP literals, `localhost`, `*.local`, `*.internal`, `*.localhost` and URLs with credentials are refused, and the link is `restless` (not checked).
 
 ## Built with Kiro
@@ -274,8 +290,12 @@ Imports go one way: `worker`, `cli`, `mcp` and `web` use `net`, and `net` uses `
 - `.kiro/hooks/`: typecheck on save, core and property-test sync, costume and accessibility review
 - `.kiro/agents/gravekeeper.md`: read-only reviewer agent
 - `.kiro/settings/mcp.json`: registers the Revenant MCP server for Kiro
-- `docs/brief/`: human-written requirements and design brief, plus
+- `docs/brief/`: requirements, design brief and
   [calibration data](docs/brief/calibration.md) measured on real links
+- `docs/design/`: the UI reference mocks
+
+The brief in `docs/brief/` and the UI reference in `docs/design/` were written with another AI
+assistant (Claude). Kiro generated the spec (`.kiro/specs/revenant/`) and all application code.
 
 ## License
 

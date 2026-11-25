@@ -134,7 +134,7 @@ describe('getEpitaph — CDX success', () => {
 // ---------------------------------------------------------------------------
 
 describe('getResurrection — URL format', () => {
-  it('builds the resurrection URL with the last timestamp and no id_ segment', async () => {
+  it('builds the resurrection URL with the copy timestamp and no id_ segment', async () => {
     fetchSpy.mockImplementation((url: string) => {
       if (url.includes('/cdx/')) {
         return Promise.resolve(makeResponse({ body: cdxBody('20100101000000', '20231101120000') }));
@@ -149,13 +149,13 @@ describe('getResurrection — URL format', () => {
 
     expect(resurrection).toBeDefined();
     expect(resurrection).toBe(
-      'https://web.archive.org/web/20231101120000/https://example.com/resurrection-test',
+      'https://web.archive.org/web/20221115000000/https://example.com/resurrection-test',
     );
     // Must NOT contain the id_ segment used only for raw snapshots
     expect(resurrection).not.toContain('id_');
   });
 
-  it('uses the chosen last capture, not the first', async () => {
+  it('uses the copy stepped back from the last capture, not the first', async () => {
     fetchSpy.mockImplementation((url: string) => {
       if (url.includes('/cdx/')) {
         return Promise.resolve(makeResponse({ body: cdxBody('20050605000000', '20240315090000') }));
@@ -168,8 +168,9 @@ describe('getResurrection — URL format', () => {
       'https://example.com/resurrection-last-ts',
     );
 
-    // Should be the last (2024), not the first (2005)
-    expect(resurrection).toContain('20240315090000');
+    // The copy is 12 months before the last capture (2024-03), not the first (2005)
+    expect(resurrection).toContain('20230315000000');
+    expect(resurrection).not.toContain('20240315090000');
     expect(resurrection).not.toContain('20050605000000');
   });
 
@@ -332,7 +333,7 @@ describe('429 back-off', () => {
     const promise = epitaphOf(createWaybackClient(), 'https://example.com/retry-after-test');
     await vi.runAllTimersAsync();
 
-    expect(await promise).toEqual({ first: '2015-01-01', last: '2020-01-01' });
+    expect(await promise).toEqual({ first: '2015-01-01', last: '2020-01-01', copy: '2019-01-15' });
     expect(cdxCalls).toBe(2);
     vi.useRealTimers();
   });
@@ -352,8 +353,8 @@ describe('429 back-off', () => {
     const promise = createWaybackClient().getArchive(u);
     await vi.runAllTimersAsync();
     expect(await promise).toEqual({
-      epitaph: { first: '2015-01-01', last: '2020-01-01' },
-      resurrection: `https://web.archive.org/web/20200101000000/${u}`,
+      epitaph: { first: '2015-01-01', last: '2020-01-01', copy: '2019-01-15' },
+      resurrection: `https://web.archive.org/web/20190115000000/${u}`,
     });
     expect(cdxCalls).toBe(2);
     vi.useRealTimers();
@@ -373,7 +374,7 @@ describe('429 back-off', () => {
     const promise = epitaphOf(createWaybackClient(), 'https://example.com/retry-after-cap-test');
     await vi.advanceTimersByTimeAsync(10_000);
 
-    expect(await promise).toEqual({ first: '2012-01-01', last: '2020-06-01' });
+    expect(await promise).toEqual({ first: '2012-01-01', last: '2020-06-01', copy: '2019-06-15' });
     vi.useRealTimers();
   });
 
@@ -454,7 +455,7 @@ describe('getEpitaph — CDX unreachable or erroring', () => {
     fetchSpy.mockImplementation((url: string) =>
       Promise.resolve(makeResponse({ body: cdxBody('20100101000000', '20230101000000') })),
     );
-    expect(await epitaphOf(client, u)).toEqual({ first: '2010-01-01', last: '2023-01-01' });
+    expect(await epitaphOf(client, u)).toEqual({ first: '2010-01-01', last: '2023-01-01', copy: '2022-01-15' });
   });
 
   it("returns 'unavailable' when the AbortController timeout fires", async () => {
@@ -514,7 +515,7 @@ describe('CDX request and life choice', () => {
     expect(cdx[0]).not.toContain('limit=');
   });
 
-  it('skips a later life and a tiny last capture; the id_ fetch uses the same timestamp', async () => {
+  it('skips a later life and a parked last capture; the stone shows the whole life, the copy and the id_ fetch use the stepped-back capture', async () => {
     const rows: Array<[string, string]> = [];
     for (let y = 2000; y <= 2004; y++) rows.push([`${y}0601000000`, '5000']);
     rows.push(['20050601000000', '900']); // parked page, far below half the median
@@ -524,7 +525,7 @@ describe('CDX request and life choice', () => {
     );
     const client = createWaybackClient();
     const u = 'https://example.com/life-choice';
-    expect(await epitaphOf(client, u)).toEqual({ first: '2000-06-01', last: '2004-06-01' });
+    expect(await epitaphOf(client, u)).toEqual({ first: '2000-06-01', last: '2005-06-01', copy: '2004-06-01' });
     expect(await resurrectionOf(client, u)).toBe(`https://web.archive.org/web/20040601000000/${u}`);
     await client.getSnapshotText(u);
     const raw = fetchSpy.mock.calls.map((c) => c[0] as string).find((x) => x.includes('id_/'));

@@ -35,7 +35,8 @@ const SNAPSHOT_TEXT_CAP = 65_536; // 64 KB
 // Hono app
 // ---------------------------------------------------------------------------
 
-const app = new Hono();
+// GITHUB_TOKEN is an optional Worker secret; it is passed to the GitHub API only.
+const app = new Hono<{ Bindings: { GITHUB_TOKEN?: string } }>();
 
 // POST /api/scan
 app.post('/api/scan', async (c) => {
@@ -158,7 +159,7 @@ app.post('/api/resolve', async (c) => {
 
     // ---- Handle kind === 'repo' ----
     if (kind === 'repo') {
-      const result = await resolveRepoReadme(input);
+      const result = await resolveRepoReadme(input, undefined, c.env?.GITHUB_TOKEN);
       if (result.ok) {
         return c.json({ source: result.source, kind: result.kind });
       }

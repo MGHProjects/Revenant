@@ -228,9 +228,10 @@ async function buildEntry(url: string): Promise<WaybackCacheEntry> {
     entry.epitaph = {
       first: timestampToDate(life.first),
       last: timestampToDate(life.last),
+      copy: timestampToDate(life.copy),
     };
     // Resurrection URL: the chosen capture, no id_ (shows Wayback toolbar)
-    entry.resurrection = `${WAYBACK_BASE}/${life.last}/${url}`;
+    entry.resurrection = `${WAYBACK_BASE}/${life.copy}/${url}`;
     // We fetch snapshot text lazily in getSnapshotText, stored separately
   }
 

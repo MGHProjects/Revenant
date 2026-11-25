@@ -9,7 +9,13 @@ afterEach(() => {
 });
 
 const API = 'https://api.github.com/repos/o/r/readme';
-const RAW = 'https://raw.githubusercontent.com/o/r/HEAD/README.md';
+const RAW_NAMES = ['README.md', 'readme.md', 'README', 'Readme.md', 'README.markdown'];
+const rawUrl = (name: string) => `https://raw.githubusercontent.com/o/r/HEAD/${name}`;
+function all404(except: string[] = []): Routes {
+  const r: Routes = {};
+  for (const n of RAW_NAMES) if (!except.includes(n)) r[rawUrl(n)] = () => new Response('', { status: 404 });
+  return r;
+}
 
 function b64(text: string, wrap = false): string {
   const s = Buffer.from(text, 'utf-8').toString('base64');
@@ -41,7 +47,7 @@ describe('resolveRepoReadme', () => {
     const { f, calls } = stub({ [API]: () => apiBody(text) });
     const r = await resolveRepoReadme('o/r', f);
     expect(r).toEqual({ ok: true, source: text, kind: 'markdown' });
-    const headers = calls[0]!.init!.headers as Record<string, string>;
+    const headers = calls.find(c => c.url === API)!.init!.headers as Record<string, string>;
     expect(headers['Accept']).toBe('application/vnd.github+json');
     expect(headers['X-GitHub-Api-Version']).toBe('2022-11-28');
     expect(headers['User-Agent']).toMatch(/^Revenant/);
@@ -73,7 +79,7 @@ describe('resolveRepoReadme', () => {
     });
     const r = await resolveRepoReadme('o/r', f);
     expect(r).toMatchObject({ ok: false, code: 'unavailable' });
-    expect(calls).toHaveLength(1);
+    expect(calls.filter(c => c.url.includes('evil.example'))).toHaveLength(0);
   });
 
   it('404 is not-found', async () => {
@@ -85,13 +91,68 @@ describe('resolveRepoReadme', () => {
     });
   });
 
-  it('403 with x-ratelimit-remaining 0 uses the raw fallback', async () => {
-    const { f, calls } = stub({
+  it('403 with x-ratelimit-remaining 0 is a rate limit', async () => {
+    const { f } = stub({
+      ...all404(),
       [API]: () => new Response('{}', { status: 403, headers: { 'x-ratelimit-remaining': '0' } }),
-      [RAW]: () => new Response('raw — text'),
     });
-    expect(await resolveRepoReadme('o/r', f)).toEqual({ ok: true, source: 'raw — text', kind: 'markdown' });
-    expect(calls.map(c => c.url)).toEqual([API, RAW]);
+    expect(await resolveRepoReadme('o/r', f)).toMatchObject({ ok: false, code: 'rate-limited' });
+  });
+
+  it('README.md hit costs one request and no API call', async () => {
+    const { f, calls } = stub({ [rawUrl('README.md')]: () => new Response('# hi — 🎃') });
+    expect(await resolveRepoReadme('o/r', f)).toEqual({ ok: true, source: '# hi — 🎃', kind: 'markdown' });
+    expect(calls.map(c => c.url)).toEqual([rawUrl('README.md')]);
+  });
+
+  it('readme.md hit after a README.md 404 costs two requests', async () => {
+    const { f, calls } = stub({
+      [rawUrl('README.md')]: () => new Response('', { status: 404 }),
+      [rawUrl('readme.md')]: () => new Response('lower'),
+    });
+    expect(await resolveRepoReadme('o/r', f)).toEqual({ ok: true, source: 'lower', kind: 'markdown' });
+    expect(calls).toHaveLength(2);
+  });
+
+  it('extensionless README is markdown', async () => {
+    const { f } = stub({ ...all404(), [rawUrl('README')]: () => new Response('see https://example.org') });
+    expect(await resolveRepoReadme('o/r', f)).toMatchObject({ ok: true, kind: 'markdown' });
+  });
+
+  it('raw non-404 failures fall through to the API', async () => {
+    const { f, calls } = stub({
+      [rawUrl('README.md')]: () => new Response('', { status: 429 }),
+      ...all404(['README.md']),
+      [API]: () => apiBody('from api'),
+    });
+    expect(await resolveRepoReadme('o/r', f)).toMatchObject({ ok: true, source: 'from api' });
+    expect(calls).toHaveLength(6);
+  });
+
+  it('all five 404 then API 200 uses the API', async () => {
+    const { f, calls } = stub({ ...all404(), [API]: () => apiBody('docs readme') });
+    expect(await resolveRepoReadme('o/r', f)).toMatchObject({ ok: true, source: 'docs readme' });
+    expect(calls.map(c => c.url)).toEqual([...RAW_NAMES.map(rawUrl), API]);
+  });
+
+  it('all five 404 then API 404 is not-found', async () => {
+    const { f } = stub({ ...all404(), [API]: () => new Response('{}', { status: 404 }) });
+    expect(await resolveRepoReadme('o/r', f)).toMatchObject({ ok: false, code: 'not-found' });
+  });
+
+  it('GITHUB_TOKEN goes to the API only, never to raw', async () => {
+    const { f, calls } = stub({ ...all404(), [API]: () => apiBody('x') });
+    await resolveRepoReadme('o/r', f, 'secret-token');
+    const auth = (c: { init?: RequestInit }) => (c.init!.headers as Record<string, string>)['Authorization'];
+    const api = calls.find(c => c.url === API)!;
+    expect(auth(api)).toBe('Bearer secret-token');
+    for (const c of calls.filter(c => c.url !== API)) expect(auth(c)).toBeUndefined();
+  });
+
+  it('no token, no Authorization header', async () => {
+    const { f, calls } = stub({ ...all404(), [API]: () => apiBody('x') });
+    await resolveRepoReadme('o/r', f);
+    expect((calls.at(-1)!.init!.headers as Record<string, string>)['Authorization']).toBeUndefined();
   });
 
   it('a plain 403 is not a rate limit', async () => {
@@ -100,10 +161,7 @@ describe('resolveRepoReadme', () => {
   });
 
   it('rate-limited with a 404 raw fallback gives the rate-limit message', async () => {
-    const { f } = stub({
-      [API]: () => new Response('{}', { status: 429 }),
-      [RAW]: () => new Response('nope', { status: 404 }),
-    });
+    const { f } = stub({ ...all404(), [API]: () => new Response('{}', { status: 429 }) });
     expect(await resolveRepoReadme('o/r', f)).toEqual({
       ok: false,
       code: 'rate-limited',
@@ -148,13 +206,7 @@ describe('POST /api/resolve (repo)', () => {
       body: { error: 'Repository not found, or it has no README.' },
     });
 
-    vi.stubGlobal(
-      'fetch',
-      stub({
-        [API]: () => new Response('{}', { status: 429 }),
-        [RAW]: () => new Response('', { status: 404 }),
-      }).f,
-    );
+    vi.stubGlobal('fetch', stub({ ...all404(), [API]: () => new Response('{}', { status: 429 }) }).f);
     expect(await resolve('o/r')).toMatchObject({ status: 429 });
 
     vi.stubGlobal('fetch', stub({ [API]: () => new Response('x', { status: 500 }) }).f);
@@ -185,7 +237,7 @@ describe('scan() repo path', () => {
     const { f, calls } = stub({ [API]: () => apiBody('# — 🎃\n') });
     vi.stubGlobal('fetch', f);
     const events = await run('o/r');
-    expect(calls[0]!.url).toBe(API);
+    expect(calls.map(c => c.url)).toContain(API);
     expect(events[0]).toMatchObject({ type: 'meta', total: 0 });
   });
 

@@ -33,7 +33,7 @@ function makeWayback(closest?: ClosestSnapshot): Wayback & { calls: Array<[strin
     calls,
     async getArchive(url: string) {
       return url === URL_DEAD
-        ? { epitaph: { first: '2015-01-01', last: '2021-06-15' }, resurrection: SNAP }
+        ? { epitaph: { first: '2015-01-01', last: '2021-06-15', copy: '2020-06-15' }, resurrection: SNAP }
         : { epitaph: 'none' as const };
     },
     async getSnapshotText() {
@@ -69,7 +69,7 @@ describe('check_links', () => {
     expect(byUrl[URL_ALIVE].verdict).toBe('alive');
     expect(byUrl[URL_DEAD].verdict).toBe('dead');
     expect(byUrl[URL_DEAD].resurrection).toBe(SNAP);
-    expect(byUrl[URL_DEAD].epitaph).toEqual({ first: '2015-01-01', last: '2021-06-15' });
+    expect(byUrl[URL_DEAD].epitaph).toEqual({ first: '2015-01-01', last: '2021-06-15', copy: '2020-06-15' });
   });
 
   it('checks a list of urls', async () => {
@@ -166,7 +166,7 @@ describe('resurrect', () => {
   it('without a date uses the chosen capture (getArchive), not the closest lookup', async () => {
     const wb = makeWayback({ status: 'found', url: 'https://web.archive.org/web/2024/x', date: '2024-01-01' });
     const p = payload(await handleResurrect({ url: URL_DEAD }, { fetcher, wayback: wb }));
-    expect(p).toMatchObject({ found: true, snapshotUrl: SNAP, snapshotDate: '2021-06-15' });
+    expect(p).toMatchObject({ found: true, snapshotUrl: SNAP, snapshotDate: '2020-06-15' });
     expect(wb.calls).toEqual([]);
   });
 
