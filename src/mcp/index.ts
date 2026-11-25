@@ -9,6 +9,7 @@ import { Server } from '@modelcontextprotocol/sdk/server/index.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import { CallToolRequestSchema, ListToolsRequestSchema } from '@modelcontextprotocol/sdk/types.js';
 import type { Fetcher, Judgement, Wayback } from '../core/types.js';
+import { archiveNote } from '../core/archive-note.js';
 import { scan } from '../net/scan.js';
 import { fetcher as defaultFetcher } from '../net/fetcher.js';
 import { createWaybackClient } from '../net/wayback.js';
@@ -64,7 +65,11 @@ export async function handleCheckLinks(
 
   if (total === 0) return fail('no URLs found');
 
-  return ok({ total, capped, capLimit: 200, judgements });
+  const withNotes = judgements.map(j => {
+    const archiveNoteText = archiveNote(j);
+    return archiveNoteText === undefined ? j : { ...j, archiveNote: archiveNoteText };
+  });
+  return ok({ total, capped, capLimit: 200, judgements: withNotes });
 }
 
 // ---------------------------------------------------------------------------
@@ -97,10 +102,8 @@ export async function handleResurrect(
       deps.wayback.getEpitaph(url),
     ]);
     if (res !== undefined) snapshot = { url: res, date: '' };
-    else if (epi === 'unavailable') {
-      lost = true;
-      unknown = true;
-    } else lost = true;
+    else if (epi === 'unavailable') unknown = true;
+    else lost = true;
   }
 
   if (snapshot) return ok({ url, found: true, snapshotUrl: snapshot.url, snapshotDate: snapshot.date });

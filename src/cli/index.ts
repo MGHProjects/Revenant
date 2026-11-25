@@ -7,6 +7,7 @@
 
 import { readFile } from 'node:fs/promises';
 import { existsSync, writeFileSync } from 'node:fs';
+import { archiveNote } from '../core/archive-note.js';
 import { patch } from '../core/patch.js';
 import type { CliOutput, Fetcher, Judgement, ScanEvent, Wayback } from '../core/types.js';
 import { scan } from '../net/scan.js';
@@ -151,7 +152,7 @@ export async function runCli(
     // Default output: one line per non-alive link (skipped when --fix ran).
     const nonAlive = judgements.filter(j => j.verdict !== 'alive');
     for (const j of nonAlive) {
-      const resurrection = j.resurrection ?? '—';
+      const resurrection = j.resurrection ?? archiveNote(j) ?? '—';
       writeTo(
         'stdout',
         `[${j.verdict}] ${j.link.url} — ${j.reason} (${resurrection})\n`,

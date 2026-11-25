@@ -1,4 +1,4 @@
-﻿# Requirements Document
+# Requirements Document
 
 ## Introduction
 
@@ -34,15 +34,16 @@ Revenant is a link-rot checker and document patcher. It scans Markdown, HTML, or
 
 #### Acceptance Criteria
 
-1. WHEN the live request fails at DNS/connection, or returns 404 or 410, THE verdict SHALL be `dead`.
+1. WHEN the live request fails and a DNS-over-HTTPS lookup confirms the host does not exist (NXDOMAIN), or the request returns 404 or 410, THE verdict SHALL be `dead`.
 2. WHEN the live request returns 5xx, THE SYSTEM SHALL retry once after 2 seconds; IF the retry also returns 5xx or fails at network level, THE verdict SHALL be `restless` with a reason stating the status code and that it was retried.
 3. WHEN the live request returns 401, 403, or 429, THE verdict SHALL be `restless`.
-4. WHEN the live request times out after 8 seconds with no response, THE verdict SHALL be `restless`.
+4. WHEN the live request times out after 8 seconds with no response, OR fails with any connection error that is not a confirmed DNS failure (including guard rejections and redirect errors), THE verdict SHALL be `restless` with the error text as reason.
 5. WHEN the live request returns 2xx after redirecting to a different registrable domain AND a Snapshot of the original URL exists AND the text similarity score between the live page and that Snapshot is below 0.2, THE verdict SHALL be `possessed`.
 6. WHEN the live request returns 2xx after redirecting to a different registrable domain AND no Snapshot of the original URL exists, THE verdict SHALL be `alive` and the reason SHALL name the new registrable domain.
 7. WHEN the live request returns 2xx and criterion 5 does not apply, THE verdict SHALL be `alive`.
 8. WHEN the final URL shares the same registrable domain as the requested URL, THE verdict SHALL NOT be `possessed`.
 9. THE SYSTEM SHALL attach a human-readable reason to every verdict, stating the HTTP status code or connection error, and where applicable the redirect target domain or the similarity score and Snapshot year (for example: `404 Not Found`, `content 7% similar to 2017 capture`, `redirected to example.com`).
+10. WHEN the live request returns 2xx after redirecting to a different registrable domain AND the Wayback Machine could not be reached to obtain a Snapshot for comparison, THE verdict SHALL be `restless` and the reason SHALL name the new registrable domain and state that the archive could not be reached.
 
 ### Requirement 3: Epitaph and resurrection
 
@@ -52,8 +53,8 @@ Revenant is a link-rot checker and document patcher. It scans Markdown, HTML, or
 
 1. WHEN a verdict is `dead` or `possessed`, THE SYSTEM SHALL query the Wayback Machine for the checked URL and return the earliest available Snapshot by archive timestamp and the most recent available Snapshot by archive timestamp as the Epitaph.
 2. IF a Snapshot exists, THEN THE SYSTEM SHALL return its archive URL as the Resurrection.
-3. IF no Snapshot exists, THEN THE SYSTEM SHALL indicate the link is lost and SHALL NOT return any URL as the Resurrection.
-4. IF the Wayback Machine returns a connection error, an HTTP error response, or no response within 10 seconds, THEN THE SYSTEM SHALL retain the existing verdict and return the Epitaph with an unavailable status.
+3. IF no Snapshot exists, THEN THE SYSTEM SHALL return the Epitaph with a none status, SHALL indicate the link is lost (never archived), and SHALL NOT return any URL as the Resurrection.
+4. IF the Wayback Machine returns a connection error, an HTTP error response, or no response within 10 seconds, THEN THE SYSTEM SHALL retain the existing verdict and return the Epitaph with an unavailable status, SHALL NOT return any URL as the Resurrection, and SHALL indicate that the archive could not be reached and the user can try again. An unavailable status SHALL be distinct from a none status and SHALL NOT be cached for 24 hours.
 
 ### Requirement 4: Patch the document
 
@@ -86,7 +87,7 @@ Revenant is a link-rot checker and document patcher. It scans Markdown, HTML, or
 
 1. WHEN a scan runs, the browser SHALL send batches of at most 3 URLs at a time to `POST /api/scan`, sending at most 2 batches in flight simultaneously, and SHALL render each returned batch of Judgements as it arrives so results appear progressively with the moon advancing.
 2. Each verdict SHALL have a distinct visual element and a text label: a lit window (warm amber) for `alive`, a tombstone for `dead`, a zombie hand with green glow for `possessed`, and a fog patch for `restless`; colour SHALL NOT be the only differentiating signal.
-3. A `dead` link's tombstone SHALL display the Epitaph on its face, and tombstone height SHALL scale linearly with the link's lifespan in whole years, with a minimum height at 0 years and a maximum height at 30 or more years. A `possessed` link SHALL display its Epitaph on the zombie hand element.
+3. A `dead` link's tombstone SHALL display the Epitaph on its face, and tombstone height SHALL scale linearly with the link's lifespan in whole years, with a minimum height (64 px) at 8 or fewer years, or when the link has no dates, and a maximum height (176 px) at 22 or more years. The zombie hand of a `possessed` link SHALL have a fixed height and carry no text; its Epitaph SHALL be shown in the selected link's inscription.
 4. WHEN the user activates Resurrect on a grave THEN the Snapshot SHALL open in a new browser tab.
 5. IF no Snapshot exists for a `dead` or `possessed` link THEN the Resurrect control SHALL be disabled and display a label indicating no archived version is available.
 6. The page SHALL provide all scan results in a table (the ledger) with one row per link, showing at minimum: URL, verdict label, reason, and Resurrection URL where available; and SHALL provide a "download patched document" action that returns the source document with `dead` and `possessed` links replaced by their Resurrection URLs where available.

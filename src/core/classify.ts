@@ -1,18 +1,26 @@
 /**
- * classify(probe, originalUrl, snapshotText?) — maps a network Probe to a verdict.
+ * classify(probe, originalUrl, snapshot?) — maps a network Probe to a verdict.
  *
- * Decision table (first match wins):
+ * Decision table (first match wins). Reasons are plain sentences in the voice of
+ * docs/design/graveyard.html, shared by web, CLI and MCP:
  *
- * | Condition                                                              | Verdict    | Reason                                   |
- * |------------------------------------------------------------------------|------------|------------------------------------------|
- * | outcome === 'timeout'                                                  | restless   | "timed out after 8 s"                    |
- * | outcome === 'network-error'                                            | dead       | connection error message                 |
- * | status is 401, 403, or 429                                             | restless   | "{status} {statusText}"                  |
- * | status is 404 or 410                                                   | dead       | "{status} {statusText}"                  |
- * | status is 5xx (after retry)                                            | restless   | "{status} after retry"                   |
- * | 2xx + different domain + snapshotText + similarity < 0.2              | possessed  | "content {score}% similar to {year} cap" |
- * | 2xx + different domain + no snapshotText                               | alive      | "redirected to {newDomain}"              |
- * | 2xx                                                                    | alive      | "{status} OK"                            |
+ * | Condition                                                  | Verdict   | Reason                                                |
+ * |------------------------------------------------------------|-----------|-------------------------------------------------------|
+ * | outcome === 'timeout'                                      | restless  | "No answer within 8 s. Not judged."                   |
+ * | network-error + dnsFailure (NXDOMAIN confirmed)            | dead      | "The domain no longer resolves."                      |
+ * | network-error (any other)                                  | restless  | "Connection failed ({text}). Not judged." (no text:   |
+ * |                                                            |           | "Connection failed. Not judged.")                     |
+ * | status 401, 403, 429                                       | restless  | "Answers {status} to robots. Not judged."             |
+ * | status 404 or 410                                          | dead      | "Answers {status}."                                   |
+ * | status 5xx (after retry)                                   | restless  | "Answers {status}, twice. Not judged."                |
+ * | 2xx + other domain + snapshot + similarity < 0.2           | possessed | "Redirects to {domain}; {n}% like the archived page." |
+ * | 2xx + other domain + snapshot + similarity >= 0.2          | alive     | "Answers {status} with the page you cited."           |
+ * | 2xx + other domain + snapshot 'unavailable' (archive down) | restless  | "Redirects to {domain}; the archive could not be      |
+ * |                                                            |           | reached to compare. Not judged."                      |
+ * | 2xx + other domain + snapshot 'none' (or omitted)          | alive     | "Redirects to {domain}; no archived copy to compare." |
+ * | 2xx                                                        | alive     | "Answers {status} with the page you cited."           |
+ * | any other status                                           | restless  | "Answers {status}. Not judged."                       |
+ * (Guard rejections are built by scan.ts and the Worker: "Not checked: {reason}.")
  *
  * Never returns `possessed` when finalUrl shares the same registrable domain
  * as originalUrl.
@@ -22,31 +30,7 @@
 
 import { similarity } from './similarity.ts';
 import { registrableDomain } from './domain.ts';
-import type { Probe, Verdict } from './types.ts';
-
-/** HTTP status text for the codes used in the decision table. */
-function statusText(status: number): string {
-  const texts: Record<number, string> = {
-    200: 'OK',
-    201: 'Created',
-    204: 'No Content',
-    301: 'Moved Permanently',
-    302: 'Found',
-    304: 'Not Modified',
-    400: 'Bad Request',
-    401: 'Unauthorized',
-    403: 'Forbidden',
-    404: 'Not Found',
-    405: 'Method Not Allowed',
-    410: 'Gone',
-    429: 'Too Many Requests',
-    500: 'Internal Server Error',
-    502: 'Bad Gateway',
-    503: 'Service Unavailable',
-    504: 'Gateway Timeout',
-  };
-  return texts[status] ?? 'Unknown';
-}
+import type { Probe, SnapshotResult, Verdict } from './types.ts';
 
 /** Extract the hostname from a URL string. Returns '' on parse failure. */
 function hostnameOf(url: string): string {
@@ -60,16 +44,19 @@ function hostnameOf(url: string): string {
 export function classify(
   probe: Probe,
   originalUrl: string,
-  snapshotText?: string,
+  snapshot?: SnapshotResult,
 ): { verdict: Verdict; reason: string } {
   // Row 1: timeout
   if (probe.outcome === 'timeout') {
-    return { verdict: 'restless', reason: 'timed out after 8 s' };
+    return { verdict: 'restless', reason: 'No answer within 8 s. Not judged.' };
   }
 
   // Row 2: network-error
   if (probe.outcome === 'network-error') {
-    return { verdict: 'dead', reason: probe.text ?? 'connection error' };
+    if (probe.dnsFailure) {
+      return { verdict: 'dead', reason: 'The domain no longer resolves.' };
+    }
+    return { verdict: 'restless', reason: probe.text ? `Connection failed (${probe.text}). Not judged.` : 'Connection failed. Not judged.' };
   }
 
   // From here on, outcome === 'response' and status is present.
@@ -77,17 +64,20 @@ export function classify(
 
   // Row 3: 401 / 403 / 429
   if (status === 401 || status === 403 || status === 429) {
-    return { verdict: 'restless', reason: `${status} ${statusText(status)}` };
+    return { verdict: 'restless', reason: `Answers ${status} to robots. Not judged.` };
   }
 
   // Row 4: 404 / 410
   if (status === 404 || status === 410) {
-    return { verdict: 'dead', reason: `${status} ${statusText(status)}` };
+    return { verdict: 'dead', reason: `Answers ${status}.` };
   }
 
   // Row 5: 5xx (after retry — the caller already retried once)
   if (status >= 500 && status <= 599) {
-    return { verdict: 'restless', reason: `${status} after retry` };
+    if (probe.noRetry) {
+      return { verdict: 'restless', reason: `Answers ${status}. Not judged.` };
+    }
+    return { verdict: 'restless', reason: `Answers ${status}, twice. Not judged.` };
   }
 
   // Rows 6–8: 2xx responses
@@ -99,9 +89,17 @@ export function classify(
     const finalDomain = registrableDomain(finalHost);
     const crossDomain = origDomain !== finalDomain && finalDomain !== '';
 
-    if (crossDomain && snapshotText !== undefined) {
+    if (crossDomain && snapshot?.status === 'unavailable') {
+      // The archive could not be reached: we cannot compare, so we do not judge.
+      return {
+        verdict: 'restless',
+        reason: `Redirects to ${finalDomain}; the archive could not be reached to compare. Not judged.`,
+      };
+    }
+
+    if (crossDomain && snapshot?.status === 'text') {
       // Row 6: possessed check
-      const score = similarity(probe.text ?? '', snapshotText);
+      const score = similarity(probe.text ?? '', snapshot.text);
       if (score < 0.2) {
         const pct = Math.round(score * 100);
         // classify() receives the snapshot body text, not the snapshot URL or its
@@ -109,24 +107,24 @@ export function classify(
         // (task 6.3) can refine the reason once it has the Epitaph.
         return {
           verdict: 'possessed',
-          reason: `content ${pct}% similar to archived capture`,
+          reason: `Redirects to ${finalDomain}; ${pct}% like the archived page.`,
         };
       }
       // High similarity → still alive (falls through to row 8 via same-domain logic;
       // but strictly this is "2xx cross-domain with snapshotText and similarity ≥ 0.2"
       // which is not in the table — treat as alive per decision table exhaustion).
-      return { verdict: 'alive', reason: `${status} OK` };
+      return { verdict: 'alive', reason: `Answers ${status} with the page you cited.` };
     }
 
-    if (crossDomain && snapshotText === undefined) {
+    if (crossDomain) {
       // Row 7: redirected to a different domain, no snapshot to compare
-      return { verdict: 'alive', reason: `redirected to ${finalDomain}` };
+      return { verdict: 'alive', reason: `Redirects to ${finalDomain}; no archived copy to compare.` };
     }
 
     // Row 8: same domain or no redirect
-    return { verdict: 'alive', reason: `${status} OK` };
+    return { verdict: 'alive', reason: `Answers ${status} with the page you cited.` };
   }
 
   // Any other status (1xx, 3xx that wasn't followed, etc.) — treat as restless
-  return { verdict: 'restless', reason: `${status} ${statusText(status)}` };
+  return { verdict: 'restless', reason: `Answers ${status}. Not judged.` };
 }

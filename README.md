@@ -2,29 +2,274 @@
 
 **Find the dead and possessed links in any document, and bring them back from the Internet Archive.**
 
-Built for [Kiroween 2026](https://kiroween.devpost.com/) — category: Costume Contest.
+Built for [Kiroween 2026](https://kiroween.devpost.com/), category: Costume Contest.
 
-38% of web pages from 2013 no longer exist. Some are worse than dead: the URL still answers, but
-the domain was sold and now serves something else. Revenant gives every link one verdict —
-`alive`, `dead`, `possessed` or `restless` — shows when it died, and replaces it with its closest
-archived snapshot.
+## What it is
 
-- **Web:** paste a document, watch its links rise as a graveyard, download the patched file.
-- **CLI:** `npx revenant README.md --fix` — exits 1 on rot, for CI.
-- **MCP:** `check_links` and `resurrect` tools so AI agents verify URLs before citing them.
+38% of web pages from 2013 no longer exist. Some links are worse than dead: the URL still
+answers, but the domain was sold and now serves something else. A normal link checker reports
+those as fine. Revenant gives every link in a Markdown or HTML document one verdict, shows when
+it died, and replaces it with its closest archived snapshot from the Wayback Machine. The same
+engine runs as a web app, as a CLI for CI, and as an MCP server for AI agents.
 
-## Status
+| Verdict | Shape on the page | Meaning |
+|---|---|---|
+| `alive` | Lit window | Responds, and the content still matches its archived self. |
+| `dead` | Tombstone | Gone: DNS failure, 404/410, or persistent 5xx. |
+| `possessed` | Green zombie hand | Responds, but now redirects to another domain whose content is nothing like the archived page. |
+| `restless` | Fog patch | Cannot tell (401, 403, 429, timeout, archive unreachable). |
 
-Not implemented yet. This repository currently holds the product brief and the Kiro setup:
+Revenant never cries wolf. When it is not sure, the verdict is `restless`, not `dead`.
 
-- `.kiro/steering/` — product, tech, structure and UI ("costume") direction
-- `.kiro/hooks/` — typecheck on save, core/property-test sync, costume and accessibility review
-- `.kiro/agents/gravekeeper.md` — read-only reviewer agent
-- `docs/brief/` — human-written requirements and design brief, plus
+- **Web:** paste a document, a page address or `owner/repo`. Links rise as a graveyard. Download the patched file.
+- **CLI:** `revenant README.md --fix`. Exits 1 when links are dead or possessed, so CI can fail on rot.
+- **MCP:** `check_links` and `resurrect` tools, so an agent can verify a URL before it cites it.
+
+## Try it
+
+Open <https://revenant.mgh-web.workers.dev>, press **Load the sample**, then **Scan the document**.
+The sample is [`samples/haunted-readme.md`](samples/haunted-readme.md): nine links with every verdict.
+
+## Screenshots
+
+The graveyard after scanning the sample, with the possessed `geocities.com` link selected:
+
+![Graveyard at 1440 px wide: two lit windows, three tombstones, three green hands, one fog patch, and the inscription for geocities.com](docs/screenshots/graveyard-1440.png)
+
+The same scene on a 390 px wide screen:
+
+![Graveyard at 390 px wide, graves wrapped into three rows](docs/screenshots/graveyard-390.png)
+
+The ledger below the scene holds the same data as a plain table, with the archived copy of each link and a checkbox to include it in the patch:
+
+![Ledger table listing nine links with verdict, reason, archived copy date and patch checkbox](docs/screenshots/ledger-1440.png)
+
+These screenshots come from a local run on the sample document, taken on 18 Nov 2026.
+
+## CLI
+
+Build once, then run the bundle with Node 22 or newer:
+
+```sh
+npm install
+npm run build:cli
+node dist/cli/index.js <file|url|owner/repo> [--fix] [--json]
+```
+
+`package.json` declares a `revenant` bin that points at `dist/cli/index.js`, so `npm link` in this
+folder puts a `revenant` command on your PATH. The examples below use that name.
+
+The input is a URL (starts with `http://` or `https://`), an `owner/repo` pair (when no file with
+that name exists), or a file path. Files ending in `.html` or `.htm` are read as HTML, anything
+else as Markdown.
+
+### Default output
+
+One line per link that is not alive: `[verdict] url — reason (archived copy)`.
+
+```console
+$ revenant samples/haunted-readme.md
+[dead] http://www.freebase.com/ — Answers 404. (https://web.archive.org/web/20160501004947/http://www.freebase.com/)
+[dead] http://www.dmoz.org/ — The domain no longer resolves. (https://web.archive.org/web/20250305234014/http://www.dmoz.org/)
+[possessed] http://www.geocities.com/SiliconValley/ — Redirects to yahoo.com; 0% like the archived page. (https://web.archive.org/web/19991009015113/http://www.geocities.com/SiliconValley/)
+[restless] https://api.github.com/user — Answers 401 to robots. Not judged. (—)
+```
+
+(Excerpt. Lines appear in the order the checks finish.)
+
+### `--fix`
+
+Overwrites the file, replacing each dead or possessed link that has an archived copy with the
+snapshot URL. It prints `Patched N links in <file>` to stderr and no per-link lines. `--fix` works
+on files only; with a URL it prints an error and exits 2.
+
+```console
+$ revenant docs/links.md --fix
+Patched 6 links in docs/links.md
+```
+
+The exit code still reflects what was found before the patch, so the run above exits 1. Run the
+check again without `--fix` to confirm.
+
+### `--json`
+
+Prints one JSON object on stdout, with one entry per distinct link. `resurrection` and `epitaph`
+are present only when known. `spans` are character offsets of the link in the source. This is an
+excerpt for two of the nine sample links:
+
+```json
+{
+  "links": [
+    {
+      "url": "http://www.google.com/reader/about/",
+      "verdict": "dead",
+      "reason": "Answers 404.",
+      "resurrection": "https://web.archive.org/web/20210503140021/http://www.google.com/reader/about/",
+      "epitaph": { "first": "2013-07-02", "last": "2021-05-03" },
+      "spans": [{ "start": 634, "end": 669 }]
+    },
+    {
+      "url": "http://www.geocities.com/SiliconValley/",
+      "verdict": "possessed",
+      "reason": "Redirects to yahoo.com; 0% like the archived page.",
+      "resurrection": "https://web.archive.org/web/19991009015113/http://www.geocities.com/SiliconValley/",
+      "epitaph": { "first": "1996-12-21", "last": "1999-10-09" },
+      "spans": [{ "start": 774, "end": 813 }]
+    }
+  ]
+}
+```
+
+`epitaph` can also be the string `"unavailable"` when the archive could not be reached.
+`--json` can be combined with `--fix`.
+
+### Exit codes
+
+| Code | Meaning |
+|---|---|
+| 0 | No dead or possessed links. `alive` and `restless` do not fail the run. |
+| 1 | At least one dead or possessed link, or the input file could not be read. |
+| 2 | Usage error: no input given, or `--fix` used with a URL or `owner/repo`. |
+
+### GitHub Actions
+
+Revenant is not published to npm, so the job builds it from a checkout of this repository.
+
+```yaml
+name: links
+on:
+  schedule:
+    - cron: '0 6 * * 1'
+  workflow_dispatch:
+
+jobs:
+  revenant:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/checkout@v4
+        with:
+          repository: <owner>/Revenant
+          path: .revenant
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm ci && npm run build:cli
+        working-directory: .revenant
+      - run: node .revenant/dist/cli/index.js README.md
+```
+
+The last step fails the job (exit 1) when README.md has a dead or possessed link.
+Replace `<owner>` with the account that hosts your copy of Revenant.
+
+## MCP server
+
+```sh
+npm install
+npm run build:mcp
+```
+
+This writes `dist/mcp/index.js`, a stdio server named `revenant`.
+
+### Kiro
+
+This repository already contains `.kiro/settings/mcp.json`:
+
+```json
+{
+  "mcpServers": {
+    "revenant": {
+      "command": "node",
+      "args": ["./dist/mcp/index.js"]
+    }
+  }
+}
+```
+
+### Other clients
+
+Use the same `mcpServers` form in the client's config file, with an absolute path, because most
+clients do not start the server from this folder:
+
+```json
+{
+  "mcpServers": {
+    "revenant": {
+      "command": "node",
+      "args": ["/absolute/path/to/Revenant/dist/mcp/index.js"]
+    }
+  }
+}
+```
+
+### Tools
+
+**`check_links`** checks links for rot.
+
+- `text` (string, optional): Markdown containing links.
+- `urls` (string array, optional): bare URLs. Used when `text` is empty or missing.
+- Returns JSON text: `{ total, capped, capLimit, judgements }`. `capLimit` is 200, and `capped` is
+  true when the input had more links than that. Each judgement has the link, `verdict`, `reason`,
+  and, for dead or possessed links, `resurrection` and `epitaph`. An `archiveNote` string is added
+  when the archive could not be reached or has no copy.
+- Input with no URLs returns an error result with the text `no URLs found`.
+
+**`resurrect`** finds the Wayback snapshot of one URL.
+
+- `url` (string, required)
+- `date` (string, optional): `YYYY-MM-DD`. The snapshot closest to that date is returned. Without it, the most recent one.
+- Returns one of:
+  - found: `{ "url", "found": true, "snapshotUrl", "snapshotDate" }`
+  - not found: `{ "url", "found": false, "lost": true, "archiveAvailability": "known" }`, meaning the archive answered and holds no copy
+  - undecided: `{ "url", "found": false, "lost": false, "archiveAvailability": "unknown" }`, meaning the archive could not be reached, so nothing is claimed
+- A missing `url` returns an error result (`url is required`). A `date` in any other format returns `date must be YYYY-MM-DD`.
+
+## Local development
+
+Requires Node 22 or newer.
+
+```sh
+npm install
+npm run dev     # Vite on http://localhost:5173, proxying /api to wrangler dev on 127.0.0.1:8787
+npm test        # Vitest: unit and fast-check property tests
+npm run check   # tsc --noEmit
+npm run deploy  # builds CLI, MCP and web, then wrangler deploy (needs a Cloudflare login)
+```
+
+If port 5173 is taken, Vite picks the next free port and prints it. `npm run dev` stops both
+servers on Ctrl+C.
+
+Layout:
+
+```
+src/core     pure engine: extract, classify, similarity, patch, guard. No network, no clock.
+src/net      the only code that touches the network: fetcher, Wayback client, scan loop
+src/worker   Hono app: POST /api/scan, POST /api/resolve, static assets
+src/cli      revenant command
+src/mcp      stdio MCP server
+web          Vite app: the graveyard
+```
+
+Imports go one way: `worker`, `cli`, `mcp` and `web` use `net`, and `net` uses `core`. Because
+`src/core` is pure, its correctness properties are tested with fast-check.
+
+## Limits worth knowing
+
+- A scan covers at most 200 links. The web app says so when the cap is hit.
+- The Worker runs on the Cloudflare free plan, so `POST /api/scan` accepts at most 3 URLs per request. The web app sends batches of 3, two at a time.
+- In the Worker, text similarity compares only the first 64 KB of visible text on each side. The CLI and MCP server run on Node and use the same core.
+- When the Wayback Machine cannot be reached, a link that needed it for comparison is `restless`, not `dead` or `possessed`. The archive times out under bursts of requests, so repeated back-to-back CLI runs can show more `restless` links than a single run.
+- Outbound requests are limited to http and https hosts by name. IP literals, `localhost`, `*.local`, `*.internal` and URLs with credentials are refused. Each request has an 8 s timeout, a 512 KB body cap and at most 5 redirects.
+
+## Built with Kiro
+
+- `.kiro/steering/`: product, tech, structure and UI ("costume") direction
+- `.kiro/specs/revenant/`: requirements, design and tasks generated from the brief
+- `.kiro/hooks/`: typecheck on save, core and property-test sync, costume and accessibility review
+- `.kiro/agents/gravekeeper.md`: read-only reviewer agent
+- `.kiro/settings/mcp.json`: registers the Revenant MCP server for Kiro
+- `docs/brief/`: human-written requirements and design brief, plus
   [calibration data](docs/brief/calibration.md) measured on real links
-- `samples/haunted-readme.md` — sample document with one verified link per verdict
-
-The spec in `.kiro/specs/revenant/` and the application code are generated with Kiro from the brief.
 
 ## License
 

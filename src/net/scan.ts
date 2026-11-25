@@ -17,11 +17,13 @@ import { extract } from '../core/extract.js';
 import { guard } from '../core/guard.js';
 import { classify } from '../core/classify.js';
 import { registrableDomain } from '../core/domain.js';
+import { shouldRetry } from './retry.js';
 import type {
   Fetcher,
   Judgement,
   Link,
   ScanEvent,
+  SnapshotResult,
   Wayback,
 } from '../core/types.js';
 
@@ -128,13 +130,14 @@ async function processLink(
   let probe = await fetcher(url, { timeoutMs: 8_000, maxBytes: 524_288 });
 
   // 5xx: retry once after 2 seconds (Requirement 2.2).
-  if (probe.outcome === 'response' && probe.status !== undefined && probe.status >= 500 && probe.status <= 599) {
+  // The retry skips DNS confirmation (keeps the Worker's per-URL subrequest budget).
+  if (shouldRetry(probe)) {
     await sleep(RETRY_DELAY_MS);
-    probe = await fetcher(url, { timeoutMs: 8_000, maxBytes: 524_288 });
+    probe = await fetcher(url, { timeoutMs: 8_000, maxBytes: 524_288, skipDns: true });
   }
 
   // Determine whether we need a snapshot text for the possessed check.
-  let snapshotText: string | undefined;
+  let snapshotText: SnapshotResult | undefined;
   if (
     probe.outcome === 'response' &&
     probe.status !== undefined &&
@@ -275,7 +278,7 @@ export async function* scan(
         judgement: {
           link,
           verdict: 'restless',
-          reason: result.reason,
+          reason: `Not checked: ${result.reason}.`,
         },
       };
     } else {

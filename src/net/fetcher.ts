@@ -1,17 +1,31 @@
 import { guard } from '../core/guard.js';
 import type { Fetcher, Probe } from '../core/types.js';
+import { confirmNoDns } from './dns.js';
 
 const DEFAULT_TIMEOUT_MS = 8_000;
 const DEFAULT_MAX_BYTES = 524_288; // 512 KB
 const MAX_REDIRECTS = 5;
 const USER_AGENT = 'Revenant/1.0';
 
+/** Cloudflare error 1016 (origin DNS error) arrives as HTTP 530 on Workers. */
+const DNS_ERROR_STATUS = 530;
+
+function hostnameOf(url: string): string {
+  try {
+    return new URL(url).hostname;
+  } catch {
+    return '';
+  }
+}
+
+
 export const fetcher: Fetcher = async (
   url: string,
-  init?: { timeoutMs: number; maxBytes: number },
+  init?: { timeoutMs: number; maxBytes: number; skipDns?: boolean },
 ): Promise<Probe> => {
   const timeoutMs = init?.timeoutMs ?? DEFAULT_TIMEOUT_MS;
   const maxBytes = init?.maxBytes ?? DEFAULT_MAX_BYTES;
+  const skipDns = init?.skipDns === true;
 
   // Validate the initial URL before any network activity.
   const initialGuard = guard(url);
@@ -39,7 +53,31 @@ export const fetcher: Fetcher = async (
           return { outcome: 'timeout' };
         }
         const message = err instanceof Error ? err.message : String(err);
+        if (!skipDns && (await confirmNoDns(hostnameOf(currentUrl))).confirmed) {
+          return { outcome: 'network-error', text: message, dnsFailure: true };
+        }
         return { outcome: 'network-error', text: message };
+      }
+
+      // On Workers an unresolvable host answers 530 instead of throwing. Confirm with DNS.
+      if (response.status === DNS_ERROR_STATUS && !skipDns) {
+        await response.body?.cancel().catch(() => undefined);
+        const dns = await confirmNoDns(hostnameOf(currentUrl));
+        if (dns.confirmed) {
+          return {
+            outcome: 'network-error',
+            text: `HTTP ${DNS_ERROR_STATUS} (DNS error)`,
+            dnsFailure: true,
+          };
+        }
+        // Two queries spent: a retry plus Wayback would break the per-URL budget.
+        return {
+          outcome: 'response',
+          status: response.status,
+          finalUrl: currentUrl,
+          text: '',
+          ...(dns.queries >= 2 ? { noRetry: true as const } : {}),
+        };
       }
 
       // Handle redirects manually.

@@ -6,13 +6,11 @@
     "target": "ES2022",
     "lib": ["ES2022"],
     "outDir": "./dist",
-    "rootDir": "./src",
-    "declaration": true,
-    "declarationMap": true,
     "sourceMap": true,
     "esModuleInterop": true,
     "skipLibCheck": true,
-    "types": ["@cloudflare/workers-types"],
+    "types": ["@cloudflare/workers-types", "node"],
+    "allowImportingTsExtensions": true,
     "paths": {
       "#core": ["./src/core/index.ts"],
       "#core/*": ["./src/core/*"],
@@ -21,5 +19,5 @@
     }
   },
   "include": ["src/**/*", "test/**/*.test.ts", "test/**/*.prop.test.ts", "test/**/*.int.test.ts"],
-  "exclude": ["node_modules", "dist", "web"]
+  "exclude": ["node_modules", "dist", "web", "test/scene.prop.test.ts"]
 }

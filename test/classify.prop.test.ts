@@ -9,6 +9,9 @@
  *   6c. For any Probe with status 5xx (the after-retry path), classify returns `restless`.
  *   6d. For any Probe whose finalUrl shares the same registrable domain as originalUrl,
  *       classify never returns `possessed`.
+ *   6f. For any Probe with outcome === 'network-error' and no dnsFailure, classify never returns `dead`.
+ *   6g. For a cross-domain 2xx whose archive lookup was 'unavailable', classify never returns
+ *       `alive` or `dead` (it is `restless`).
  *   6e. Every result has exactly one verdict and a non-empty reason.
  */
 
@@ -16,7 +19,7 @@ import { describe, it } from 'vitest';
 import * as fc from 'fast-check';
 import { classify } from '../src/core/classify.ts';
 import { registrableDomain } from '../src/core/domain.ts';
-import type { Probe } from '../src/core/types.ts';
+import type { Probe, SnapshotResult } from '../src/core/types.ts';
 
 // ---------------------------------------------------------------------------
 // Generators
@@ -52,6 +55,7 @@ function arbProbe(): fc.Arbitrary<Probe> {
   const networkErrorProbe: fc.Arbitrary<Probe> = fc.record({
     outcome: fc.constant('network-error' as const),
     text: fc.oneof(fc.constant(undefined), fc.string({ minLength: 1 })),
+    dnsFailure: fc.oneof(fc.constant(undefined), fc.constant(true as const)),
   });
 
   const responseProbe: fc.Arbitrary<Probe> = fc
@@ -67,9 +71,13 @@ function arbProbe(): fc.Arbitrary<Probe> {
 }
 
 /** Arbitrary snapshot text (passed as the third arg to classify). */
-const arbSnapshotText = fc.oneof(
+const arbSnapshotText: fc.Arbitrary<SnapshotResult | undefined> = fc.oneof(
   fc.constant(undefined),
-  fc.string({ minLength: 1, maxLength: 500 }),
+  fc.constant({ status: 'none' } as const),
+  fc.constant({ status: 'unavailable' } as const),
+  fc
+    .string({ minLength: 1, maxLength: 500 })
+    .map((text): SnapshotResult => ({ status: 'text', text })),
 );
 
 // ---------------------------------------------------------------------------
@@ -158,6 +166,41 @@ describe('Property 6: Never cry wolf', () => {
           };
           const { verdict } = classify(probe, originalUrl, snapshotText);
           return verdict !== 'possessed';
+        },
+      ),
+      { numRuns: 100 },
+    );
+  });
+
+  it('6f: network-error without dnsFailure is never dead', () => {
+    fc.assert(
+      fc.property(
+        fc.oneof(fc.constant(undefined), fc.string()),
+        arbHttpUrl,
+        arbSnapshotText,
+        (text, originalUrl, snapshotText) => {
+          const probe: Probe = { outcome: 'network-error', text };
+          const { verdict } = classify(probe, originalUrl, snapshotText);
+          return verdict !== 'dead';
+        },
+      ),
+      { numRuns: 100 },
+    );
+  });
+
+  it('6g: cross-domain 2xx with the archive unavailable is never alive or dead', () => {
+    fc.assert(
+      fc.property(
+        fc.integer({ min: 200, max: 299 }),
+        fc.stringMatching(/^[a-z]{3,10}$/),
+        fc.stringMatching(/^[a-z]{3,10}$/),
+        arbText,
+        (status, a, b, text) => {
+          const originalUrl = `https://${a}one.com/page`;
+          const finalUrl = `https://${b}two.org/`;
+          const probe: Probe = { outcome: 'response', status, finalUrl, text };
+          const { verdict } = classify(probe, originalUrl, { status: 'unavailable' });
+          return verdict !== 'alive' && verdict !== 'dead';
         },
       ),
       { numRuns: 100 },

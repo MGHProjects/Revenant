@@ -86,8 +86,7 @@ describe('getEpitaph — CDX success', () => {
     const client = createWaybackClient();
     const result = await client.getEpitaph('https://example.com/cdx-success-1');
 
-    expect(result).not.toBe('unavailable');
-    if (result === 'unavailable') return; // narrow type for TS
+    if (result === 'unavailable' || result === 'none') throw new Error('expected epitaph');
     expect(result.first).toBe('2009-03-12');
     expect(result.last).toBe('2023-10-25');
   });
@@ -106,8 +105,7 @@ describe('getEpitaph — CDX success', () => {
     const client = createWaybackClient();
     const result = await client.getEpitaph('https://example.com/cdx-success-2');
 
-    expect(result).not.toBe('unavailable');
-    if (result === 'unavailable') return;
+    if (result === 'unavailable' || result === 'none') throw new Error('expected epitaph');
     expect(result.first).toBe('2017-03-15');
     expect(result.last).toBe('2022-08-01');
   });
@@ -163,7 +161,7 @@ describe('getResurrection — URL format', () => {
     expect(resurrection).not.toContain('20050605000000');
   });
 
-  it('returns undefined when no snapshot exists', async () => {
+  it('returns none when the archive has no capture', async () => {
     fetchSpy.mockImplementation(() =>
       Promise.resolve(makeResponse({ body: cdxEmptyBody() })),
     );
@@ -204,12 +202,13 @@ describe('getSnapshotText — HTML stripping', () => {
       'https://example.com/snapshot-text',
     );
 
-    expect(text).toBeDefined();
-    expect(text).toContain('Hello');
-    expect(text).toContain('world');
+    expect(text.status).toBe('text');
+    const body = text.status === 'text' ? text.text : '';
+    expect(body).toContain('Hello');
+    expect(body).toContain('world');
     // HTML tags must be stripped
-    expect(text).not.toContain('<html>');
-    expect(text).not.toContain('<strong>');
+    expect(body).not.toContain('<html>');
+    expect(body).not.toContain('<strong>');
   });
 
   it('uses the id_ URL pattern for the raw snapshot fetch', async () => {
@@ -238,7 +237,7 @@ describe('getSnapshotText — HTML stripping', () => {
     expect(idFetchCall).toBeDefined();
   });
 
-  it('returns undefined when no snapshot exists', async () => {
+  it('returns none when the archive has no capture', async () => {
     fetchSpy.mockImplementation(() =>
       Promise.resolve(makeResponse({ body: cdxEmptyBody() })),
     );
@@ -248,7 +247,36 @@ describe('getSnapshotText — HTML stripping', () => {
       'https://example.com/snapshot-no-archive',
     );
 
-    expect(text).toBeUndefined();
+    expect(text).toEqual({ status: 'none' });
+  });
+
+  it('returns unavailable when the id_ fetch fails, and does not cache it', async () => {
+    let idCalls = 0;
+    fetchSpy.mockImplementation((url: string) => {
+      if (url.includes('limit=')) {
+        return Promise.resolve(makeResponse({ body: cdxBody('20190101000000') }));
+      }
+      if (url.includes('id_/')) {
+        idCalls += 1;
+        if (idCalls === 1) return Promise.resolve(makeResponse({ status: 503 }));
+        return Promise.resolve(makeResponse({ body: '<p>Recovered page</p>' }));
+      }
+      return Promise.resolve(makeResponse({ status: 404 }));
+    });
+    const client = createWaybackClient();
+    const url = 'https://example.com/snapshot-id-fails';
+    expect(await client.getSnapshotText(url)).toEqual({ status: 'unavailable' });
+    const second = await client.getSnapshotText(url);
+    expect(second.status).toBe('text');
+    expect(idCalls).toBe(2);
+  });
+
+  it('returns unavailable when the CDX lookup fails', async () => {
+    fetchSpy.mockImplementation(() => Promise.reject(new Error('boom')));
+    const client = createWaybackClient();
+    expect(await client.getSnapshotText('https://example.com/snapshot-cdx-fails')).toEqual({
+      status: 'unavailable',
+    });
   });
 
   it('strips script and style tags from snapshot HTML', async () => {
@@ -274,9 +302,10 @@ describe('getSnapshotText — HTML stripping', () => {
       'https://example.com/snapshot-script-style',
     );
 
-    expect(text).toContain('Visible text here');
-    expect(text).not.toContain('body{color:red}');
-    expect(text).not.toContain('alert');
+    const body = text.status === 'text' ? text.text : '';
+    expect(body).toContain('Visible text here');
+    expect(body).not.toContain('body{color:red}');
+    expect(body).not.toContain('alert');
   });
 });
 
@@ -401,16 +430,34 @@ describe('getEpitaph — CDX unreachable or erroring', () => {
     expect(result).toBe('unavailable');
   });
 
-  it("returns 'unavailable' when CDX returns an empty array (no captures)", async () => {
+  it("returns 'none' when CDX returns only the header row (never archived)", async () => {
     // An array with only the header row means no snapshots exist.
-    fetchSpy.mockResolvedValue(makeResponse({ body: cdxEmptyBody() }));
+    fetchSpy.mockImplementation(() => Promise.resolve(makeResponse({ body: cdxEmptyBody() })));
 
     const client = createWaybackClient();
     const result = await client.getEpitaph(
       'https://example.com/cdx-empty',
     );
 
-    expect(result).toBe('unavailable');
+    expect(result).toBe('none');
+  });
+
+  it("returns 'none' when CDX returns an empty array", async () => {
+    fetchSpy.mockImplementation(() => Promise.resolve(makeResponse({ body: '[]' })));
+    const result = await createWaybackClient().getEpitaph('https://example.com/cdx-empty-array');
+    expect(result).toBe('none');
+  });
+
+  it("does not cache 'unavailable': a later call that succeeds returns the epitaph", async () => {
+    const u = 'https://example.com/cdx-retry-after-outage';
+    fetchSpy.mockImplementation(() => Promise.resolve(makeResponse({ status: 500, body: 'down' })));
+    const client = createWaybackClient();
+    expect(await client.getEpitaph(u)).toBe('unavailable');
+
+    fetchSpy.mockImplementation((url: string) =>
+      Promise.resolve(makeResponse({ body: cdxBody(url.includes('limit=-1') ? '20230101000000' : '20100101000000') })),
+    );
+    expect(await client.getEpitaph(u)).toEqual({ first: '2010-01-01', last: '2023-01-01' });
   });
 
   it("returns 'unavailable' when the AbortController timeout fires", async () => {

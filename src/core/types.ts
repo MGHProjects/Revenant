@@ -16,6 +16,10 @@ export interface Probe {
   status?: number;
   finalUrl?: string;
   text?: string;
+  /** Set only when a DNS-over-HTTPS lookup confirmed NXDOMAIN for the host. */
+  dnsFailure?: true;
+  /** Set when the fetcher already spent its full DNS budget on a 530; the caller must not retry. */
+  noRetry?: true;
 }
 
 /** First and last Wayback Machine capture dates as ISO date strings (YYYY-MM-DD). */
@@ -24,12 +28,20 @@ export interface Epitaph {
   last: string;
 }
 
+/**
+ * What the archive said about a URL.
+ * - Epitaph: at least one 200 capture exists; first and last dates.
+ * - 'none': the archive answered and holds no 200 capture (never archived).
+ * - 'unavailable': the archive could not be reached (connection error, HTTP error, bad reply, timeout, second 429).
+ */
+export type EpitaphResult = Epitaph | 'none' | 'unavailable';
+
 /** The final assessment of one link after fetching and classification. */
 export interface Judgement {
   link: Link;
   verdict: Verdict;
   reason: string;
-  epitaph?: Epitaph | 'unavailable';
+  epitaph?: EpitaphResult;
   resurrection?: string;
 }
 
@@ -39,7 +51,7 @@ export interface Judgement {
  */
 export type Fetcher = (
   url: string,
-  init?: { timeoutMs: number; maxBytes: number }
+  init?: { timeoutMs: number; maxBytes: number; skipDns?: boolean }
 ) => Promise<Probe>;
 
 /**
@@ -47,15 +59,28 @@ export type Fetcher = (
  * Injected into `scan()` so tests can fake it without real network calls.
  */
 export interface Wayback {
-  getEpitaph(url: string): Promise<Epitaph | 'unavailable'>;
+  getEpitaph(url: string): Promise<EpitaphResult>;
   getResurrection(url: string): Promise<string | undefined>;
-  getSnapshotText(url: string): Promise<string | undefined>;
+  getSnapshotText(url: string): Promise<SnapshotResult>;
   /**
    * Snapshot closest to `date` (YYYY-MM-DD), or the most recent when omitted.
    * Distinguishes "no snapshot" from "archive unreachable". Optional so existing fakes still type-check.
    */
   getClosestSnapshot?(url: string, date?: string): Promise<ClosestSnapshot>;
 }
+
+/**
+ * What the archive said about the body of the last good capture of a URL.
+ * Same semantics as `EpitaphResult`:
+ * - 'text': the capture was fetched; `text` is its visible text.
+ * - 'none': the archive answered and holds no usable 200 capture (empty CDX, or an empty body).
+ * - 'unavailable': the archive could not be reached for the CDX lookup or the `id_` body
+ *   (connection error, non-2xx, timeout, second 429, malformed CDX). Never cached.
+ */
+export type SnapshotResult =
+  | { status: 'text'; text: string }
+  | { status: 'none' }
+  | { status: 'unavailable' };
 
 export type ClosestSnapshot =
   | { status: 'found'; url: string; date: string }
@@ -75,7 +100,7 @@ export interface CliOutput {
     verdict: Verdict;
     reason: string;
     resurrection?: string;
-    epitaph?: Epitaph | 'unavailable';
+    epitaph?: EpitaphResult;
     spans: Array<{ start: number; end: number }>;
   }>;
 }

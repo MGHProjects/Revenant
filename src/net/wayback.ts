@@ -7,24 +7,26 @@
  *   Snapshot text (no toolbar): https://web.archive.org/web/{timestamp}id_/{url}
  *   Resurrection URL (no id_): https://web.archive.org/web/{timestamp}/{url}
  *
- * Caching: 24-hour in-memory Map keyed by URL.
+ * Caching: 24-hour in-memory Map keyed by URL. 'unavailable' is never cached; 'none' is.
  *          Also attempts the platform Cache API (Workers) with a try/catch.
  *
  * 429 back-off: reads Retry-After (capped at 10 s), waits, retries once.
  * Timeout: 10 s on all Wayback requests; on failure returns 'unavailable'.
+ * An empty CDX answer (archive reachable, no 200 capture) returns 'none'.
  */
 
 import { visibleText } from '../core/visible-text.js';
-import type { ClosestSnapshot, Epitaph, Wayback } from '../core/types.js';
+import type { ClosestSnapshot, Epitaph, EpitaphResult, SnapshotResult, Wayback } from '../core/types.js';
 
 // ---------------------------------------------------------------------------
 // Types
 // ---------------------------------------------------------------------------
 
 interface WaybackCacheEntry {
-  epitaph?: Epitaph | 'unavailable';
+  epitaph?: EpitaphResult;
   resurrection?: string;
-  snapshotText?: string;
+  /** Never holds 'unavailable'. */
+  snapshot?: SnapshotResult;
   cachedAt: number;
   ttlMs: 86_400_000;
 }
@@ -182,29 +184,31 @@ async function waybackFetchWithRetry(url: string): Promise<string | undefined> {
 // ---------------------------------------------------------------------------
 
 /**
- * Fetch a CDX endpoint and return the first data row (index 0 is headers).
- * Returns undefined when no snapshots found or on error.
+ * Fetch a CDX endpoint and return the first data row's timestamp (index 0 is headers).
+ * 'none' = archive answered with no capture; 'unavailable' = could not be reached or bad reply.
  */
 async function fetchCdxTimestamp(
   targetUrl: string,
   limit: 1 | -1,
-): Promise<string | undefined> {
+): Promise<string | 'none' | 'unavailable'> {
   const cdxUrl = `${CDX_BASE}&url=${encodeURIComponent(targetUrl)}&limit=${limit}`;
   const text = await waybackFetchWithRetry(cdxUrl);
-  if (!text) return undefined;
+  if (text === undefined) return 'unavailable';
 
   let rows: unknown;
   try {
     rows = JSON.parse(text);
   } catch {
-    return undefined;
+    // The CDX server answers an empty result set with an empty body.
+    return text.trim() === '' ? 'none' : 'unavailable';
   }
 
-  if (!Array.isArray(rows) || rows.length < 2) return undefined;
+  if (!Array.isArray(rows)) return 'unavailable';
+  if (rows.length < 2) return 'none';
 
   // rows[0] = ["timestamp","statuscode"] header; rows[1..] = data
   const data = rows[1] as CdxRow;
-  if (!Array.isArray(data) || typeof data[0] !== 'string') return undefined;
+  if (!Array.isArray(data) || typeof data[0] !== 'string') return 'unavailable';
 
   return data[0]; // timestamp string
 }
@@ -218,7 +222,7 @@ async function loadEntry(url: string): Promise<WaybackCacheEntry | undefined> {
   const mem = getCached(url);
   if (mem) return mem;
   const platform = await platformCacheGet(url);
-  if (platform) {
+  if (platform && platform.epitaph !== 'unavailable') {
     setCached(url, platform);
     return platform;
   }
@@ -237,7 +241,11 @@ async function buildEntry(url: string): Promise<WaybackCacheEntry> {
     ttlMs: TTL_MS,
   };
 
-  if (firstTs && lastTs) {
+  if (firstTs === 'unavailable' || lastTs === 'unavailable') {
+    entry.epitaph = 'unavailable';
+  } else if (firstTs === 'none' || lastTs === 'none') {
+    entry.epitaph = 'none';
+  } else {
     entry.epitaph = {
       first: timestampToDate(firstTs),
       last: timestampToDate(lastTs),
@@ -245,12 +253,7 @@ async function buildEntry(url: string): Promise<WaybackCacheEntry> {
     // Resurrection URL: last snapshot, no id_ (shows Wayback toolbar)
     entry.resurrection = `${WAYBACK_BASE}/${lastTs}/${url}`;
     // We fetch snapshot text lazily in getSnapshotText, stored separately
-  } else {
-    entry.epitaph = 'unavailable';
   }
-
-  const cacheKey = `https://wayback-cache.revenant.internal/${encodeURIComponent(url)}`;
-  setCached(cacheKey, entry);
 
   return entry;
 }
@@ -272,7 +275,8 @@ async function getEntry(url: string): Promise<WaybackCacheEntry> {
 
   const entry = await buildEntry(url);
 
-  // Store under the proper key (buildEntry used its own ad-hoc key — overwrite here)
+  // 'unavailable' is transient: never cached, so a retry asks the archive again.
+  if (entry.epitaph === 'unavailable') return entry;
   memCache.set(key, entry);
   await platformCacheSet(key, entry);
 
@@ -318,7 +322,7 @@ export function createWaybackClient(_fetcher?: unknown): Wayback {
       }
     },
 
-    async getEpitaph(url: string): Promise<Epitaph | 'unavailable'> {
+    async getEpitaph(url: string): Promise<EpitaphResult> {
       const entry = await getEntry(url);
       return entry.epitaph ?? 'unavailable';
     },
@@ -328,36 +332,44 @@ export function createWaybackClient(_fetcher?: unknown): Wayback {
       return entry.resurrection;
     },
 
-    async getSnapshotText(url: string): Promise<string | undefined> {
+    async getSnapshotText(url: string): Promise<SnapshotResult> {
       const entry = await getEntry(url);
 
-      // Return from cache if already fetched
-      if ('snapshotText' in entry) return entry.snapshotText;
+      // Return from cache if already fetched (only 'text' and 'none' are ever stored)
+      if (entry.snapshot) return entry.snapshot;
 
-      // Need the last CDX timestamp to fetch the raw snapshot
-      if (!entry.resurrection) return undefined;
+      // CDX lookup failed: the archive could not be reached.
+      if (entry.epitaph === 'unavailable') return { status: 'unavailable' };
+
+      // The archive answered with no 200 capture.
+      if (!entry.resurrection) return { status: 'none' };
 
       // Extract timestamp from resurrection URL:
       // https://web.archive.org/web/{timestamp}/{url}
       const match = entry.resurrection.match(
         /^https:\/\/web\.archive\.org\/web\/(\d{14})\//,
       );
-      if (!match) return undefined;
+      if (!match) return { status: 'unavailable' };
 
       const timestamp = match[1];
       // Raw snapshot (id_ suppresses Wayback toolbar)
       const snapshotUrl = `${WAYBACK_BASE}/${timestamp}id_/${url}`;
 
       const html = await waybackFetchWithRetry(snapshotUrl);
-      const text = html ? visibleText(html) : undefined;
 
-      // Update cache entry with snapshotText
-      entry.snapshotText = text;
+      // A failed body fetch is transient: report it, but do not cache it.
+      if (html === undefined) return { status: 'unavailable' };
+
+      const text = visibleText(html);
+      // An empty capture gives nothing to compare against.
+      const result: SnapshotResult = text === '' ? { status: 'none' } : { status: 'text', text };
+
+      entry.snapshot = result;
       const key = cacheKey(url);
       setCached(key, entry);
       await platformCacheSet(key, entry);
 
-      return text;
+      return result;
     },
   };
 }

@@ -86,7 +86,7 @@ Build Revenant as a TypeScript ESM project targeting Cloudflare Workers (web + W
   - [x] 6.7 Write an integration test for `scan` in `test/scan.int.test.ts` using fake `Fetcher` and fake `Wayback` over a 10-link document. Cover: DNS failure (→ `dead`), 404 (→ `dead`), 5xx with successful retry (→ `alive`), 5xx with failed retry (→ `restless`), 403 (→ `restless`), timeout (→ `restless`), 2xx same-domain redirect (→ `alive`), 2xx cross-domain with low-similarity snapshot (→ `possessed`).
     - _Requirements: 2.1, 2.2, 2.3, 2.4, 3.1, 3.2_
 
-- [~] 7. Checkpoint — core and network complete
+- [x] 7. Checkpoint — core and network complete
   - Run `npm test` (Vitest) and `npm run check` (tsc --noEmit). All tests must pass and type-checker must report no errors before continuing to the Worker and UI.
 
 - [x] 8. Worker HTTP API
@@ -124,25 +124,50 @@ Build Revenant as a TypeScript ESM project targeting Cloudflare Workers (web + W
   - [x] 10.5 Write CLI tests in `test/cli.int.test.ts` using a temporary file and a fake `Fetcher` shim: default output with mixed verdicts including `possessed`; no output when all alive (exit 0); exit 1 on `dead`/`possessed`; `--fix` rewrites file (replaces both `dead` and `possessed` links); `--fix` on URL → error + exit 2; `--json` output shape; `--fix --json` on URL → JSON error.
     - _Requirements: 7.1, 7.2, 7.3, 7.4, 7.5, 7.6_
 
-- [~] 11. Checkpoint — all surfaces wired
+- [x] 11. Checkpoint — all surfaces wired
   - Run `npm test` and `npm run check`. Confirm no failures and no type errors before the MCP step.
 
-- [ ] 12. MCP server
+- [x] 12. MCP server
   - [x] 12.1 Implement the stdio MCP server in `src/mcp/index.ts` using `@modelcontextprotocol/sdk`. Register two tools:
     - `check_links(text | urls[])`: empty input → MCP error (not empty list); otherwise return one `Judgement` per distinct URL with 200-URL cap and safe-fetching rules (Requirement 8.1–8.2).
     - `resurrect(url, date?)`: return closest Snapshot URL; handle all four cases: snapshot found, only no-snapshot, only Wayback unreachable, both (Requirement 8.3).
     - _Requirements: 8.1, 8.2, 8.3, 8.4_
   - [x] 12.2 Write MCP server tests in `test/mcp.int.test.ts` using fake `Fetcher` and fake `Wayback`: `check_links` with text, with URL list, with empty input (MCP error); `resurrect` for all four snapshot/reachability states.
     - _Requirements: 8.1, 8.2, 8.3_
-  - [-] 12.3 Add an esbuild build step for `src/mcp/index.ts` targeting Node.js and register the server in `.kiro/settings/mcp.json` with `"command": "node"` and `"args": ["./dist/mcp/index.js"]`.
+  - [x] 12.3 Add an esbuild build step for `src/mcp/index.ts` targeting Node.js and register the server in `.kiro/settings/mcp.json` with `"command": "node"` and `"args": ["./dist/mcp/index.js"]`.
     - _Requirements: 8.1_
 
-- [ ] 13. Ship
-  - [~] 13.1 Deploy to Cloudflare Workers using `npm run deploy`. Verify the Worker URL is live and the Graveyard page loads.
+- [x] 14. Rework after the first local run
+  - [x] 14.1 Never cry wolf on network errors. Add `dnsFailure?: true` to `Probe` in `src/core/types.ts`. In `src/net/fetcher.ts`, when `fetch` throws (not on abort), confirm DNS failure with one DNS-over-HTTPS query `https://cloudflare-dns.com/dns-query?name={host}&type=A` (`accept: application/dns-json`, 3 s timeout); set `dnsFailure: true` only when the answer is `Status: 3` (NXDOMAIN). In `classify`, `network-error` with `dnsFailure` is `dead` ("domain does not exist"); any other `network-error` is `restless` with the error text. Update the decision table in `classify.ts` and `design.md`, add sub-property 6f (`network-error` without `dnsFailure` is never `dead`) to `test/classify.prop.test.ts`, and update `test/classify.test.ts` and `test/scan.int.test.ts` fixtures.
+    - _Requirements: 2.1, 2.4_
+  - [x] 14.2 One renderer and a bundled sample. Make `web/scene.ts` the only grave renderer: `web/graveyard.ts` imports it and the simpler grave drawing (`renderGrave` and its helpers) is deleted. Load Sample imports `samples/haunted-readme.md?raw` (add a `*.md?raw` module declaration for `tsconfig.web.json`); no fetch.
+    - _Requirements: 6.1, 6.2, 6.3, 6.9_
+  - [x] 14.3 Layout per `.kiro/steering/costume.md`: the graveyard is the page. Full-width night scene with the moon in the sky as the progress indicator, a ground line, and graves rising from the ground; the input is a compact panel above the scene. Remove the empty grey rectangle and the floating moon circle. Before a scan, show an empty graveyard with a one-line invitation. Ledger stays below the scene. Works at 1440 px and 390 px wide.
+    - _Requirements: 6.1, 6.2, 6.7, 6.8_
+  - [x] 14.4 `npm run dev` runs Vite and `wrangler dev` together (tech.md), with Vite proxying `/api` to `wrangler dev`. No new dependency.
     - _Requirements: 6_
-  - [~] 13.2 Run the sample document on the live Worker and confirm at least one result for each of the four verdicts (`alive`, `dead`, `possessed`, `restless`). Update the sample document if any verdict is missing.
+  - [x] 14.5 Reason copy from the approved mockup (`docs/design/graveyard.html`). `classify` returns plain sentences in the mockup's voice, shared by web, CLI and MCP: alive "Answers 200 with the page you cited."; confirmed DNS failure "The domain no longer resolves."; 404/410 "Answers 404." / "Answers 410."; possessed "Redirects to {domain}; {n}% like the archived page."; 401/403/429 "Answers {status} to robots. Not judged."; 5xx after retry "Answers {status}, twice. Not judged."; timeout "No answer within 8 s. Not judged."; other network error "Connection failed ({text}). Not judged."; cross-domain redirect with no snapshot "Redirects to {domain}; no archived copy to compare."; guard rejection "Not checked: {reason}." Update unit, property, scan, CLI and MCP tests that match on reason text.
+    - _Requirements: 2.1, 2.2, 2.3, 2.4, 2.5_
+  - [x] 14.6 Port `docs/design/graveyard.html` into `web/index.html`, `web/styles.css`, `web/scene.ts` (shapes, plots, moon, ghost) and `web/graveyard.ts` (extract, batching, state), wired to the real engine. Same layout, tokens, shapes, copy, motion and breakpoint. Real `Judgement`s from `POST /api/scan` (batches of 3, 2 in flight, one moon step per returned batch); lifespan `clamp(years * 12, 40, 220)` from the Epitaph; sample via `?raw`; Download calls `patch()` and saves; IM Fell English self-hosted in `web/`. Keep every accessibility behaviour of the mockup. Delete the previous UI code. Supersedes 14.3.
+    - _Requirements: 4.1, 6.1, 6.2, 6.3, 6.4, 6.5, 6.6, 6.7, 6.8, 6.9_
+  - [x] 14.7 Tell "never archived" from "archive unreachable". The Wayback client returns a distinct value when the archive answered with no capture (empty CDX) versus when it could not be reached (connection error, HTTP error, timeout, second 429). Carry that through `Judgement` so every door can tell them apart: "Lost: never archived" only for the first case, "The archive could not be reached. Try again." for the second. Tests for both in `test/wayback.test.ts` and `test/scan.int.test.ts`. Delete `test/guard-smoke.mjs`, `test/guard-smoke-runner.ts` and `test/guard-debug.ts` if nothing imports them.
+    - _Requirements: 3.1, 3.3, 3.4_
+  - [x] 14.8 Port `docs/design/canvas/project/Main.dc.html` (canvas component format; translate, do not copy) into `web/` on top of the 14.6 wiring, then delete `docs/design/graveyard.html`. Match its layout, colours, type, spacing, shapes, copy and animations; no fence, no textures, one ground line per row. Tombstone height `clamp(years * 8, 64, 176)`; possessed hand has a fixed height. Why sentences come from `classify`. Ledger is a real `<table>` that stacks at ≤760 px, with a Patch checkbox (checked by default, only on rows with a snapshot) that drives `patch()` exclusions. Accessibility per costume.md.
+    - _Requirements: 4.1, 4.5, 6.1, 6.2, 6.3, 6.4, 6.5, 6.6, 6.7, 6.8, 6.9_
+  - [x] 14.9 Workers DNS failure arrives as HTTP 530. When the fetcher gets a 530 (Cloudflare error 1016) on any hop, confirm with DNS-over-HTTPS (`https://cloudflare-dns.com/dns-query`, `accept: application/dns-json`): NXDOMAIN, or no A/AAAA record, is `dead` with the DNS reason; anything else stays `restless`. A confirmed 530 is not retried. Shared DNS confirmation with the thrown-fetch path. Worst case stays within 16 subrequests per URL (50 per `/api/scan` request). Tests for both outcomes.
+    - _Requirements: 2.1, 2.2, 2.4, 5_
+  - [x] 14.10 Possessed check when the archive is unreachable. Investigate with `wrangler tail` why codeplex.com is `alive` ("no archived copy to compare") in production but `possessed` locally: archive answered "no capture", or was unreachable. A cross-domain 2xx whose comparison failed because the archive was unreachable is `restless`. Report the finding before changing the rule for the "no capture" case.
+    - _Requirements: 2.5, 2.7, 3.4_
+  - [x] 14.11 Sample links that hold from Cloudflare. Replace the w3.org link (403 from the Worker) and the npmjs link (200 from the Worker) in `samples/haunted-readme.md` with one stable `alive` and one stable `restless` link, each verified against the deployed Worker, and update the expected-verdict comment at the end of the sample.
     - _Requirements: 6.9_
-  - [~] 13.3 Write `README.md`: one-paragraph description, Graveyard screenshots showing all four verdicts, CLI usage examples (`revenant`, `--fix`, `--json`), MCP configuration instructions, local development instructions (`npm run dev`, `npm test`).
+  - [x] 14.12 Polish from review. Drop the italic epitaph style (regular IM Fell English, no synthesized slant). Add explicit table roles (`table`, `row`, `columnheader`, `cell`) to the ledger. Set `"node": ">=22"` in `package.json` engines. Join the possessed hand's thumb to the palm. Arrow navigation in the yard is Left/Right only. Singular copy for one link ("1 link judged.", "1 link will point to its archived copy in the download.").
+    - _Requirements: 6.2, 6.8_
+- [x] 13. Ship
+  - [x] 13.1 Deploy to Cloudflare Workers using `npm run deploy`. Verify the Worker URL is live and the Graveyard page loads.
+    - _Requirements: 6_
+  - [x] 13.2 Run the sample document on the live Worker and confirm at least one result for each of the four verdicts (`alive`, `dead`, `possessed`, `restless`). Update the sample document if any verdict is missing.
+    - _Requirements: 6.9_
+  - [x] 13.3 Write `README.md`: one-paragraph description, Graveyard screenshots showing all four verdicts, CLI usage examples (`revenant`, `--fix`, `--json`), MCP configuration instructions, local development instructions (`npm run dev`, `npm test`).
     - _Requirements: 6, 7, 8_
 
 ## Notes
@@ -177,9 +202,17 @@ Build Revenant as a TypeScript ESM project targeting Cloudflare Workers (web + W
     { "id": 14, "tasks": ["10.4", "10.5"] },
     { "id": 15, "tasks": ["12.1"] },
     { "id": 16, "tasks": ["12.2", "12.3"] },
-    { "id": 17, "tasks": ["13.1"] },
-    { "id": 18, "tasks": ["13.2"] },
-    { "id": 19, "tasks": ["13.3"] }
+    { "id": 17, "tasks": ["14.1", "14.2", "14.4"] },
+    { "id": 18, "tasks": ["14.3"] },
+    { "id": 19, "tasks": ["14.5", "14.6"] },
+    { "id": 20, "tasks": ["14.7"] },
+    { "id": 21, "tasks": ["14.8"] },
+    { "id": 22, "tasks": ["14.9", "14.11"] },
+    { "id": 23, "tasks": ["14.10"] },
+    { "id": 24, "tasks": ["14.12"] },
+    { "id": 25, "tasks": ["13.1"] },
+    { "id": 26, "tasks": ["13.2"] },
+    { "id": 27, "tasks": ["13.3"] }
   ]
 }
 ```

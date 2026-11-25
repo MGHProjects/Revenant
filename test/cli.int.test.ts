@@ -12,7 +12,7 @@ import { writeFileSync, readFileSync, mkdtempSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { runCli } from '../src/cli/index.js';
-import type { Fetcher, Probe, Wayback, Epitaph, CliOutput } from '../src/core/types.js';
+import type { Fetcher, Probe, SnapshotResult, Wayback, Epitaph, CliOutput } from '../src/core/types.js';
 
 // ---------------------------------------------------------------------------
 // Test URLs
@@ -45,9 +45,9 @@ const fakeWayback: Wayback = {
     if (url === URL_POSSESSED) return RESURRECTION_URL_POSSESSED;
     return undefined;
   },
-  async getSnapshotText(url: string): Promise<string | undefined> {
-    if (url === URL_POSSESSED) return SNAPSHOT_TEXT_POSSESSED;
-    return undefined;
+  async getSnapshotText(url: string): Promise<SnapshotResult> {
+    if (url === URL_POSSESSED) return { status: 'text', text: SNAPSHOT_TEXT_POSSESSED };
+    return { status: 'none' };
   },
 };
 
@@ -337,5 +337,44 @@ describe('CLI missing input argument', () => {
     expect(exitCode).toBe(2);
     expect(stdout).toBe('');
     expect(stderr).toContain('Usage:');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Archive notes in default output
+// ---------------------------------------------------------------------------
+
+describe('runCli — archive notes', () => {
+  it('prints the never-archived and unreachable sentences for dead links', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'revenant-note-'));
+    try {
+      const file = join(dir, 'notes.md');
+      writeFileSync(file, '[a](https://never.example.com/)\n[b](https://silent.example.com/)\n', 'utf8');
+      const deadFetcher: Fetcher = async (url: string): Promise<Probe> => ({
+        outcome: 'response',
+        status: 404,
+        finalUrl: url,
+        text: '',
+      });
+      const wayback: Wayback = {
+        async getEpitaph(url: string) {
+          return url.includes('never') ? 'none' : 'unavailable';
+        },
+        async getResurrection() {
+          return undefined;
+        },
+        async getSnapshotText() {
+          return { status: 'none' };
+        },
+      };
+      const { stdout } = await runCli([file], deadFetcher, wayback);
+      const lines = stdout.trim().split('\n');
+      const never = lines.find(l => l.includes('never.example.com'))!;
+      const silent = lines.find(l => l.includes('silent.example.com'))!;
+      expect(never).toContain('(Lost: never archived)');
+      expect(silent).toContain('(The archive could not be reached. Try again.)');
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
   });
 });

@@ -38,7 +38,7 @@ function makeWayback(closest?: ClosestSnapshot): Wayback & { calls: Array<[strin
       return url === URL_DEAD ? SNAP : undefined;
     },
     async getSnapshotText() {
-      return undefined;
+      return { status: 'none' };
     },
     ...(closest
       ? {
@@ -108,7 +108,7 @@ describe('check_links', () => {
     const j = payload(r).judgements[0];
     expect(j.verdict).toBe('restless');
     expect(typeof j.reason).toBe('string');
-    expect(j.reason.length).toBeGreaterThan(0);
+    expect(j.reason).toMatch(/^Not checked: .+\.$/);
     expect(fetched).toBe(false);
   });
 });
@@ -137,7 +137,7 @@ describe('resurrect', () => {
     expect(p.snapshotUrl).toBeUndefined();
   });
 
-  it('reports lost and unknown when the fallback path sees an unreachable archive', async () => {
+  it('reports unknown, not lost, when the fallback path sees an unreachable archive', async () => {
     const wayback: Wayback = {
       async getEpitaph() {
         return 'unavailable';
@@ -146,12 +146,28 @@ describe('resurrect', () => {
         return undefined;
       },
       async getSnapshotText() {
-        return undefined;
+        return { status: 'none' };
       },
     };
     const p = payload(await handleResurrect(D, { fetcher, wayback }));
-    expect(p).toMatchObject({ found: false, lost: true, archiveAvailability: 'unknown' });
+    expect(p).toMatchObject({ found: false, lost: false, archiveAvailability: 'unknown' });
     expect(p.snapshotUrl).toBeUndefined();
+  });
+
+  it('reports lost when the fallback path sees a never-archived URL', async () => {
+    const wayback: Wayback = {
+      async getEpitaph() {
+        return 'none';
+      },
+      async getResurrection() {
+        return undefined;
+      },
+      async getSnapshotText() {
+        return { status: 'none' };
+      },
+    };
+    const p = payload(await handleResurrect(D, { fetcher, wayback }));
+    expect(p).toMatchObject({ found: false, lost: true, archiveAvailability: 'known' });
   });
 
   it('passes the date to the Wayback lookup', async () => {

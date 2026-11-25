@@ -17,7 +17,8 @@
 
 import { describe, it, expect } from 'vitest';
 import { scan } from '../src/net/scan.ts';
-import type { Fetcher, Probe, Wayback, Epitaph, Judgement } from '../src/core/types.ts';
+import { archiveNote } from '../src/core/archive-note.ts';
+import type { Fetcher, Probe, SnapshotResult, Wayback, Epitaph, Judgement } from '../src/core/types.ts';
 
 // ---------------------------------------------------------------------------
 // Test URLs — one per scenario
@@ -80,11 +81,11 @@ const fakeWayback: Wayback = {
     return undefined;
   },
 
-  async getSnapshotText(url: string): Promise<string | undefined> {
+  async getSnapshotText(url: string): Promise<SnapshotResult> {
     if (url === URL_POSSESSED) {
-      return SNAPSHOT_TEXT_POSSESSED;
+      return { status: 'text', text: SNAPSHOT_TEXT_POSSESSED };
     }
-    return undefined;
+    return { status: 'none' };
   },
 };
 
@@ -101,7 +102,7 @@ const fakeFetcher: Fetcher = async (url: string): Promise<Probe> => {
 
   switch (url) {
     case URL_DNS_FAIL:
-      return { outcome: 'network-error', text: 'ENOTFOUND dns-fail.example.com' };
+      return { outcome: 'network-error', text: 'ENOTFOUND dns-fail.example.com', dnsFailure: true };
 
     case URL_NOT_FOUND:
       return { outcome: 'response', status: 404, finalUrl: url, text: '' };
@@ -188,7 +189,7 @@ describe('scan() integration — fake Fetcher and Wayback', () => {
     const j = judgements.get(URL_DNS_FAIL);
     expect(j).toBeDefined();
     expect(j!.verdict).toBe('dead');
-    expect(j!.reason).toContain('ENOTFOUND');
+    expect(j!.reason).toBe('The domain no longer resolves.');
   });
 
   // ---- Requirement 2.1: 404 → dead ----
@@ -196,7 +197,7 @@ describe('scan() integration — fake Fetcher and Wayback', () => {
     const j = judgements.get(URL_NOT_FOUND);
     expect(j).toBeDefined();
     expect(j!.verdict).toBe('dead');
-    expect(j!.reason).toContain('404');
+    expect(j!.reason).toBe('Answers 404.');
   });
 
   // ---- Requirement 2.2: 5xx + successful retry → alive ----
@@ -211,8 +212,7 @@ describe('scan() integration — fake Fetcher and Wayback', () => {
     const j = judgements.get(URL_RETRY_FAIL);
     expect(j).toBeDefined();
     expect(j!.verdict).toBe('restless');
-    expect(j!.reason).toContain('503');
-    expect(j!.reason).toContain('retry');
+    expect(j!.reason).toBe('Answers 503, twice. Not judged.');
   });
 
   // ---- Requirement 2.3: 403 → restless ----
@@ -220,7 +220,7 @@ describe('scan() integration — fake Fetcher and Wayback', () => {
     const j = judgements.get(URL_FORBIDDEN);
     expect(j).toBeDefined();
     expect(j!.verdict).toBe('restless');
-    expect(j!.reason).toContain('403');
+    expect(j!.reason).toBe('Answers 403 to robots. Not judged.');
   });
 
   // ---- Requirement 2.4: timeout → restless ----
@@ -228,7 +228,7 @@ describe('scan() integration — fake Fetcher and Wayback', () => {
     const j = judgements.get(URL_TIMEOUT);
     expect(j).toBeDefined();
     expect(j!.verdict).toBe('restless');
-    expect(j!.reason).toContain('timed out');
+    expect(j!.reason).toBe('No answer within 8 s. Not judged.');
   });
 
   // ---- Requirement 2.7 / 2.8: 2xx same-domain redirect → alive, never possessed ----
@@ -245,7 +245,7 @@ describe('scan() integration — fake Fetcher and Wayback', () => {
     const j = judgements.get(URL_POSSESSED);
     expect(j).toBeDefined();
     expect(j!.verdict).toBe('possessed');
-    expect(j!.reason).toMatch(/\d+%/); // e.g. "content 0% similar to archived capture"
+    expect(j!.reason).toMatch(/^Redirects to .+; \d+% like the archived page\.$/)
   });
 
   it('possessed link has epitaph (Requirement 3.1)', () => {
@@ -299,5 +299,95 @@ describe('scan() integration — fake Fetcher and Wayback', () => {
       expect(j!.epitaph).toBeUndefined();
       expect(j!.resurrection).toBeUndefined();
     }
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Archive notes: "never archived" vs "archive unreachable"
+// ---------------------------------------------------------------------------
+
+describe('scan — never archived vs archive unreachable', () => {
+  const URL_NEVER = 'http://never-archived.example.com/';
+  const URL_SILENT = 'http://archive-silent.example.com/';
+  const doc = `- [a](${URL_NEVER})\n- [b](${URL_SILENT})\n`;
+
+  const deadFetcher: Fetcher = async (url: string): Promise<Probe> => ({
+    outcome: 'response',
+    status: 404,
+    finalUrl: url,
+    text: '',
+  });
+
+  const wayback: Wayback = {
+    async getEpitaph(url: string) {
+      return url === URL_NEVER ? 'none' : 'unavailable';
+    },
+    async getResurrection() {
+      return undefined;
+    },
+    async getSnapshotText() {
+      return { status: 'none' };
+    },
+  };
+
+  it('passes both values through and sets distinct notes, with no resurrection', async () => {
+    const judgements: Judgement[] = [];
+    for await (const ev of scan(doc, 'markdown', deadFetcher, wayback, new Date(0))) {
+      if (ev.type === 'judgement') judgements.push(ev.judgement);
+    }
+    const never = judgements.find(j => j.link.url === URL_NEVER)!;
+    const silent = judgements.find(j => j.link.url === URL_SILENT)!;
+
+    expect(never.verdict).toBe('dead');
+    expect(never.epitaph).toBe('none');
+    expect(never.resurrection).toBeUndefined();
+    expect(archiveNote(never)).toBe('Lost: never archived');
+
+    expect(silent.verdict).toBe('dead');
+    expect(silent.epitaph).toBe('unavailable');
+    expect(silent.resurrection).toBeUndefined();
+    expect(archiveNote(silent)).toBe('The archive could not be reached. Try again.');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Cross-domain 2xx: archive unreachable vs. no capture
+// ---------------------------------------------------------------------------
+
+describe('scan — cross-domain redirect, archive unreachable vs. no capture', () => {
+  const URL_CODEPLEX = 'http://www.codeplex.com/';
+  const URL_KIKO = 'http://www.kiko.com/';
+  const doc = `- [a](${URL_CODEPLEX})\n- [b](${URL_KIKO})\n`;
+  const redirectingFetcher: Fetcher = async (url: string): Promise<Probe> => ({
+    outcome: 'response',
+    status: 200,
+    finalUrl: 'https://www.microsoft.com/',
+    text: 'Microsoft home page',
+  });
+  const wayback: Wayback = {
+    async getEpitaph() {
+      return 'unavailable';
+    },
+    async getResurrection() {
+      return undefined;
+    },
+    async getSnapshotText(url: string): Promise<SnapshotResult> {
+      return url === URL_CODEPLEX ? { status: 'unavailable' } : { status: 'none' };
+    },
+  };
+
+  it('archive unreachable → restless; no capture → alive (unchanged)', async () => {
+    const judgements: Judgement[] = [];
+    for await (const ev of scan(doc, 'markdown', redirectingFetcher, wayback, new Date(0))) {
+      if (ev.type === 'judgement') judgements.push(ev.judgement);
+    }
+    const codeplex = judgements.find(j => j.link.url === URL_CODEPLEX)!;
+    const kiko = judgements.find(j => j.link.url === URL_KIKO)!;
+    expect(codeplex.verdict).toBe('restless');
+    expect(codeplex.reason).toBe(
+      'Redirects to microsoft.com; the archive could not be reached to compare. Not judged.',
+    );
+    expect(kiko.verdict).toBe('alive');
+    expect(kiko.reason).toBe('Redirects to microsoft.com; no archived copy to compare.');
   });
 });

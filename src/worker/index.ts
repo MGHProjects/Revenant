@@ -7,6 +7,9 @@
  *
  * Free-plan constraints (50 subrequests, 10 ms CPU per request):
  *   - max 3 URLs per /api/scan call
+ *   - worst case per URL is 16 subrequests (3 URLs = 48): first attempt 6 hops + 1 DoH
+ *     query (a 530 whose A query found records), retry 6 hops with no DoH, 3 Wayback calls.
+ *     A 530 that used 2 DoH queries is not retried (8, no Wayback); a thrown fetch is 6 + 2 + 3.
  *   - similarity applied to first 64 KB of visible text only
  *   // shortcut: fixed 64 KB cap, raise it if the Worker is moved to the paid plan.
  *
@@ -20,8 +23,9 @@ import { similarity } from '../core/similarity.js';
 import { visibleText } from '../core/visible-text.js';
 import { registrableDomain } from '../core/domain.js';
 import { fetcher } from '../net/fetcher.js';
+import { shouldRetry } from '../net/retry.js';
 import { createWaybackClient } from '../net/wayback.js';
-import type { Judgement, Link } from '../core/types.js';
+import type { Judgement, Link, SnapshotResult } from '../core/types.js';
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -65,18 +69,14 @@ async function scanUrl(url: string): Promise<Judgement> {
   let probe = await fetcher(url, { timeoutMs: TIMEOUT_MS, maxBytes: MAX_BYTES });
 
   // 5xx: retry once after 2 s
-  if (
-    probe.outcome === 'response' &&
-    probe.status !== undefined &&
-    probe.status >= 500 &&
-    probe.status <= 599
-  ) {
+  // The retry skips DNS confirmation (keeps the per-URL subrequest budget at 16).
+  if (shouldRetry(probe)) {
     await sleep(RETRY_DELAY_MS);
-    probe = await fetcher(url, { timeoutMs: TIMEOUT_MS, maxBytes: MAX_BYTES });
+    probe = await fetcher(url, { timeoutMs: TIMEOUT_MS, maxBytes: MAX_BYTES, skipDns: true });
   }
 
   // Determine whether we need a snapshot text for the possessed check
-  let snapshotText: string | undefined;
+  let snapshotText: SnapshotResult | undefined;
   if (
     probe.outcome === 'response' &&
     probe.status !== undefined &&
@@ -89,7 +89,10 @@ async function scanUrl(url: string): Promise<Judgement> {
     if (origDomain !== finalDomain && finalDomain !== '') {
       const rawText = await wayback.getSnapshotText(url);
       // Apply 64 KB cap before similarity computation
-      snapshotText = rawText !== undefined ? rawText.slice(0, SNAPSHOT_TEXT_CAP) : undefined;
+      snapshotText =
+        rawText.status === 'text'
+          ? { status: 'text', text: rawText.text.slice(0, SNAPSHOT_TEXT_CAP) }
+          : rawText;
     }
   }
 
@@ -179,7 +182,7 @@ app.post('/api/scan', async (c) => {
         guardedJudgements.push({
           link: { url, spans: [] },
           verdict: 'restless',
-          reason: result.reason,
+          reason: `Not checked: ${result.reason}.`,
         });
       } else {
         passingUrls.push(url);

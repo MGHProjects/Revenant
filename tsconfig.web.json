@@ -12,6 +12,6 @@
       "#net/*": ["./src/net/*"]
     }
   },
-  "include": ["web/**/*", "src/core/types.ts"],
+  "include": ["web/**/*", "src/core/types.ts", "test/scene.prop.test.ts"],
   "exclude": ["node_modules", "dist"]
 }

@@ -63,7 +63,7 @@ const fakeWayback: Wayback = {
     return undefined;
   },
   async getSnapshotText(_url: string) {
-    return undefined;
+    return { status: 'none' };
   },
 };
 
@@ -185,7 +185,7 @@ describe('Property 9: Deduplication invariant', () => {
             const noopWayback: Wayback = {
               async getEpitaph() { return 'unavailable'; },
               async getResurrection() { return undefined; },
-              async getSnapshotText() { return undefined; },
+              async getSnapshotText() { return { status: 'none' }; },
             };
 
             // Collect judgements from scan.

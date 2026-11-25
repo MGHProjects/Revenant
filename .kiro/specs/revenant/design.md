@@ -1,4 +1,4 @@
-﻿# Design Document: Revenant
+# Design Document: Revenant
 
 ## Overview
 
@@ -45,6 +45,7 @@ interface Probe {                       // what the network saw; input to classi
   status?: number;
   finalUrl?: string;
   text?: string;
+  dnsFailure?: true;                    // set only when DoH confirmed NXDOMAIN
 }
 
 interface Epitaph { first: string; last: string }   // ISO dates
@@ -53,7 +54,7 @@ interface Judgement {
   link: Link;
   verdict: Verdict;
   reason: string;
-  epitaph?: Epitaph | 'unavailable';
+  epitaph?: EpitaphResult;
   resurrection?: string;               // snapshot URL
 }
 
@@ -63,10 +64,21 @@ type Fetcher = (
 ) => Promise<Probe>;
 
 // Wayback client interface — injected so tests can fake it
+// EpitaphResult = Epitaph | 'none' | 'unavailable'
+//   'none'        archive answered, no 200 capture (never archived)
+//   'unavailable' archive could not be reached (connection error, HTTP error, bad reply, timeout, second 429)
+// archiveNote(judgement) in src/core/archive-note.ts is the one place the user-facing sentences live:
+//   'none' -> 'Lost: never archived'; 'unavailable' -> 'The archive could not be reached. Try again.'
+type SnapshotResult =
+  | { status: 'text'; text: string }
+  | { status: 'none' }
+  | { status: 'unavailable' };
 interface Wayback {
-  getEpitaph(url: string): Promise<Epitaph | 'unavailable'>;
+  getEpitaph(url: string): Promise<EpitaphResult>;
   getResurrection(url: string): Promise<string | undefined>;
-  getSnapshotText(url: string): Promise<string | undefined>;
+  // 'text' = last good capture's visible text; 'none' = archive answered, no usable 200 capture;
+  // 'unavailable' = archive could not be reached for the CDX lookup or the id_ body (never cached).
+  getSnapshotText(url: string): Promise<SnapshotResult>;
 }
 
 // Scan event union — all events yielded by scan()
@@ -123,20 +135,25 @@ Strips tags, `<script>` blocks, and `<style>` blocks from an HTML string using a
 
 Used by `classify` to determine whether a redirect crosses domain boundaries. The registrable domain is the last two labels of the hostname, with these two-level suffixes treated as the effective TLD: `co.uk`, `com.au`, `org.uk`, `net.au`, `co.nz`, `org.nz`, `com.br`, `co.jp`. Switch to the full Public Suffix List if a false `possessed` verdict is traced to this shortcut.
 
-#### `classify(probe: Probe, originalUrl: string, snapshotText?: string) → { verdict: Verdict; reason: string }`
+#### `classify(probe: Probe, originalUrl: string, snapshot?: SnapshotResult) → { verdict: Verdict; reason: string }`
 
 Decision table, evaluated top to bottom; first match wins:
 
 | Condition | Verdict | Reason format |
 |---|---|---|
-| `outcome === 'timeout'` | `restless` | `timed out after 8 s` |
-| `outcome === 'network-error'` | `dead` | connection error message |
-| `status` is 401, 403, or 429 | `restless` | `{status} {statusText}` |
-| `status` is 404 or 410 | `dead` | `{status} {statusText}` |
-| `status` is 5xx (after retry) | `restless` | `{status} after retry` |
-| `status` is 2xx AND `finalUrl` has a **different** registrable domain AND `snapshotText` provided AND `similarity(probe.text, snapshotText) < 0.2` | `possessed` | `content {score}% similar to {year} capture` |
-| `status` is 2xx AND `finalUrl` has a **different** registrable domain AND `snapshotText` absent | `alive` | `redirected to {newDomain}` |
-| `status` is 2xx | `alive` | `{status} OK` |
+| `outcome === 'timeout'` | `restless` | `No answer within 8 s. Not judged.` |
+| `outcome === 'network-error'` AND `dnsFailure` (NXDOMAIN confirmed) | `dead` | `The domain no longer resolves.` |
+| `outcome === 'network-error'` (any other) | `restless` | `Connection failed ({text}). Not judged.` (no text: `Connection failed. Not judged.`) |
+| `status` is 401, 403, or 429 | `restless` | `Answers {status} to robots. Not judged.` |
+| `status` is 404 or 410 | `dead` | `Answers {status}.` |
+| `status` is 5xx (after retry) | `restless` | `Answers {status}, twice. Not judged.` |
+| `status` is 2xx AND `finalUrl` has a **different** registrable domain AND `snapshot` is `text` AND `similarity(probe.text, snapshot.text) < 0.2` | `possessed` | `Redirects to {domain}; {n}% like the archived page.` |
+| `status` is 2xx AND `finalUrl` has a **different** registrable domain AND `snapshot` is `unavailable` (archive could not be reached) | `restless` | `Redirects to {domain}; the archive could not be reached to compare. Not judged.` |
+| `status` is 2xx AND `finalUrl` has a **different** registrable domain AND `snapshot` is `none` or absent | `alive` | `Redirects to {domain}; no archived copy to compare.` |
+| `status` is 2xx (same domain, or cross-domain with similarity ≥ 0.2) | `alive` | `Answers {status} with the page you cited.` |
+| any other status | `restless` | `Answers {status}. Not judged.` |
+
+Guard rejections (built in `scan` and the Worker `/api/scan`, so MCP inherits them): `restless`, `Not checked: {reason}.`
 
 The `possessed` path is **never** taken when `finalUrl` shares the same registrable domain as `originalUrl` (see `docs/brief/calibration.md`).
 
@@ -157,6 +174,8 @@ Links with verdict `alive` or `restless`, `dead` or `possessed` links with no `r
 The concrete network function injected into all doors. The core never imports it.
 
 - **Redirect handling**: follows redirects manually, calling `guard()` on each redirect target before following it. Rejects after 5 redirects with a `network-error` Probe.
+- **DNS confirmation**: one shared helper, `confirmNoDns(host)` in `src/net/dns.ts`, used when `fetch` throws (not on abort) and when any hop answers HTTP 530 (Cloudflare error 1016, which is how Workers report a host that does not resolve). It queries `https://cloudflare-dns.com/dns-query?name={host}&type=A` (`accept: application/dns-json`, 3 s timeout). `Status: 3` confirms. `Status: 0` with no A answer triggers one `type=AAAA` query; `Status: 0` with no AAAA answer confirms (CNAME-only answers count as no record). Anything else (records present, other status, DoH error, timeout, non-2xx) is "not confirmed". It never throws. A confirmed failure yields `Probe { outcome: 'network-error', dnsFailure: true }` (`dead`, "The domain no longer resolves.") and is never retried. An unconfirmed 530 is returned as a normal 5xx response (retry once, then `restless`); if it already used both DoH queries it carries `noRetry` and classifies as `Answers 530. Not judged.`. No DoH query for guard rejections or redirect errors.
+- **Subrequest budget**: worst case per URL is 16. The first attempt may use 6 hops + 1 DoH query (a 530 whose A query found records) and then retry; the retry passes `skipDns` so it makes 6 hops and no DoH, then 3 Wayback calls: 7 + 6 + 3 = 16. A 530 that used 2 DoH queries is not retried (8, no Wayback). A thrown fetch is not retried (6 + 2 + 3 = 11). 3 URLs = 48, under the free-plan limit of 50.
 - **Timeout**: 8-second deadline; returns `Probe { outcome: 'timeout' }` on expiry.
 - **Body size**: reads at most 512 KB. If the body exceeds that limit, reading stops and the truncated body is used as the full response (the request is **not** treated as an error).
 - **5xx retry**: the `scan` orchestrator (not the fetcher) retries once after 2 seconds when the first response is 5xx.
@@ -180,15 +199,15 @@ The Resurrection URL is derived from the CDX "last" timestamp already fetched fo
 
 ```ts
 interface WaybackCacheEntry {
-  epitaph?: Epitaph | 'unavailable';
+  epitaph?: EpitaphResult;
   resurrection?: string;
-  snapshotText?: string;
+  snapshot?: SnapshotResult; // never `unavailable`
   cachedAt: number;
   ttlMs: 86_400_000;
 }
 ```
 
-**429 back-off**: wait for the `Retry-After` header value (capped at 10 s), retry once; on second failure set Epitaph to `'unavailable'`.
+**429 back-off**: wait for the `Retry-After` header value (capped at 10 s), retry once; on second failure set Epitaph to `'unavailable'`. An empty CDX result (`[]` or header row only) sets Epitaph to `'none'`. `'unavailable'` is never cached; `'none'` is cached 24 h. The same holds for `getSnapshotText`: `{ status: 'unavailable' }` (CDX lookup or `id_` body failed) is returned but never stored, in memory or in the platform cache, so a later call asks the archive again; `{ status: 'text' }` and `{ status: 'none' }` are cached 24 h.
 
 **Unreachable / timeout**: on connection error, HTTP error response, or no response within 10 s, retain existing verdict and set Epitaph to `'unavailable'`.
 
@@ -210,7 +229,7 @@ The six steps:
    - `fetcher(url, { timeoutMs: 8000, maxBytes: 524288 })` → `Probe`.
    - If 5xx: wait 2 s and call `fetcher` once more.
    - Only if 2xx AND `finalUrl` has a different registrable domain from `url`: call `wayback.getSnapshotText(url)`.
-   - `classify(probe, url, snapshotText?)` → `{ verdict, reason }`.
+   - `classify(probe, url, snapshot?)` → `{ verdict, reason }`.
    - If `dead` or `possessed`: call `wayback.getEpitaph(url)` → Epitaph; build Resurrection from CDX last timestamp.
    - Yield `{ type: 'judgement', judgement }`.
 6. **Same-domain alive links** cost zero Wayback calls.
@@ -254,7 +273,7 @@ Built with Vite + vanilla TypeScript + CSS. No UI framework. Graphics are inline
 
 Each element carries a visible text label matching the status name. Colour is not the only differentiating signal (Requirement 6.2). Palette: ink `#0b0d12`, slate `#1c2230`, bone `#e8e2d0`, amber `#f2a541`, ectoplasm `#7dffb0`, blood `#c8323c` (errors only). Motion is 400–900 ms ease-out; things rise, nothing bounces.
 
-Tombstone height: `clamp(lifespanYears * 12, 40, 220)` pixels (whole-year difference between Epitaph `first` and `last`). A `dead` link with no Epitaph uses minimum height 40 px. Maximum height is 220 px (reached at 30+ years).
+Tombstone height: `clamp(lifespanYears * 8, 64, 176)` pixels (whole-year difference between Epitaph `first` and `last`). A `dead` link with no dates (Epitaph `'none'`, `'unavailable'` or missing) uses the minimum height 64 px. Maximum height is 176 px (reached at 22+ years). The possessed hand has a fixed height.
 
 The moon icon advances one step per batch received. Batching: the browser extracts links itself (core bundled by Vite), sends at most 3 URLs per `POST /api/scan`, and keeps at most 2 requests in flight. For page-URL or repo inputs, the browser first calls `POST /api/resolve` to get the source text.
 
@@ -323,7 +342,7 @@ interface CliOutput {
     verdict: Verdict;
     reason: string;
     resurrection?: string;
-    epitaph?: Epitaph | 'unavailable';
+    epitaph?: EpitaphResult;
     spans: Array<{ start: number; end: number }>;
   }>;
 }
@@ -372,7 +391,7 @@ For any strings `a` and `b`: `similarity(a, b)` is in `[0, 1]`; `similarity(a, a
 
 ### Property 6: Never cry wolf
 
-For any `Probe` with status 401, 403, or 429, `classify` never returns `dead`. For any `Probe` with `outcome === 'timeout'`, `classify` never returns `dead`. For any `Probe` with `status` 5xx (the after-retry path), `classify` returns `restless`, not `dead`. For any `Probe`, `classify` returns exactly one verdict and a non-empty reason. For any `Probe` whose `finalUrl` shares the same registrable domain as the requested URL, `classify` never returns `possessed`.
+For any `Probe` with status 401, 403, or 429, `classify` never returns `dead`. For any `Probe` with `outcome === 'timeout'`, `classify` never returns `dead`. For any `Probe` with `status` 5xx (the after-retry path), `classify` returns `restless`, not `dead`. For any `Probe` with `outcome === 'network-error'` and no `dnsFailure`, `classify` never returns `dead` (6f). For any `Probe`, `classify` returns exactly one verdict and a non-empty reason. For any `Probe` whose `finalUrl` shares the same registrable domain as the requested URL, `classify` never returns `possessed`.
 
 **Validates: Requirements 2.2, 2.3, 2.4, 2.8, 2.9**
 
@@ -402,7 +421,7 @@ For any scan over more than 6 URLs (with a fake instrumented `Fetcher`), the num
 
 ### Property 11: Tombstone height formula
 
-For any whole-year lifespan value `y ≥ 0`, `clamp(y * 12, 40, 220)` is in `[40, 220]`, equals 40 at `y === 0`, increases linearly until 220 at `y === 30`, and remains 220 for all `y > 30`.
+For any whole-year lifespan value `y ≥ 0`, `clamp(y * 8, 64, 176)` is in `[64, 176]`, equals 64 for all `y ≤ 8`, increases linearly (`y * 8`) between `y === 8` and `y === 22`, and equals 176 for all `y ≥ 22`.
 
 **Validates: Requirements 6.3**
 
@@ -411,14 +430,15 @@ For any whole-year lifespan value `y ≥ 0`, `clamp(y * 12, 40, 220)` is in `[40
 | Failure | Behaviour |
 |---|---|
 | Input page or repo cannot be fetched, or content type undetectable | 422 `{ error }` from Worker; CLI stderr + exit 2; nothing scanned |
-| Wayback unreachable or times out (10 s) | Verdict retained; Epitaph `'unavailable'`; UI shows "the archive is silent" |
+| Wayback unreachable, HTTP error, bad reply, or times out (10 s) | Verdict retained; Epitaph `'unavailable'` (not cached); no resurrection; `archiveNote` = "The archive could not be reached. Try again." |
+| Wayback answers with no 200 capture | Verdict retained; Epitaph `'none'`; no resurrection; `archiveNote` = "Lost: never archived" |
 | 429 from Wayback | Wait `Retry-After` (capped 10 s), retry once; on second failure Epitaph `'unavailable'` |
 | URL rejected by `guard` | Verdict `restless` with rejection reason; no outbound request |
 | Response body exceeds 512 KB | Reading stops at 512 KB; truncated body treated as full response; not an error |
 | `--fix` on a URL input | Error to stderr (JSON when `--json` set); exit 2 |
 | `check_links` with no URLs | MCP error response |
 | Redirect target fails `guard` | Verdict `restless` with rejection reason |
-| 5xx after retry | Verdict `restless` with `{status} after retry` reason |
+| 5xx after retry | Verdict `restless` with `Answers {status}, twice. Not judged.` reason |
 
 ## Testing Strategy
 
