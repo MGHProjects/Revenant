@@ -325,6 +325,110 @@ describe('extract – HTML', () => {
 });
 
 // ---------------------------------------------------------------------------
+// Parentheses in destinations — task 18.1
+// ---------------------------------------------------------------------------
+
+describe('extract – parentheses in URLs', () => {
+  const wiki = 'https://en.wikipedia.org/wiki/Load_balancing_(computing)';
+
+  it('inline link keeps balanced parentheses', () => {
+    const source = `[LB](${wiki})`;
+    const links = extract(source, 'markdown');
+    expect(links.map(l => l.url)).toEqual([wiki]);
+    assertSpansRoundtrip(source, links);
+  });
+
+  it('reference definition keeps balanced parentheses', () => {
+    const source = `[LB][lb]\n\n[lb]: ${wiki}`;
+    const links = extract(source, 'markdown');
+    expect(links.map(l => l.url)).toEqual([wiki]);
+    expect(links[0]!.spans).toHaveLength(1);
+    assertSpansRoundtrip(source, links);
+  });
+
+  it('autolink keeps balanced parentheses', () => {
+    const source = `See <${wiki}> now.`;
+    const links = extract(source, 'markdown');
+    expect(links.map(l => l.url)).toEqual([wiki]);
+    assertSpansRoundtrip(source, links);
+  });
+
+  it('bare URL in prose keeps balanced parentheses', () => {
+    const source = `Read ${wiki} first.`;
+    const links = extract(source, 'markdown');
+    expect(links.map(l => l.url)).toEqual([wiki]);
+    assertSpansRoundtrip(source, links);
+  });
+
+  it('nested balanced parentheses', () => {
+    const url = 'https://example.com/a_(b_(c))';
+    const source = `[x](${url}) and ${url}.`;
+    const links = extract(source, 'markdown');
+    expect(links.map(l => l.url)).toEqual([url]);
+    expect(links[0]!.spans).toHaveLength(2);
+    assertSpansRoundtrip(source, links);
+  });
+
+  it('a sentence closing paren is not part of a bare URL', () => {
+    const source = '(see https://example.com/a)';
+    const links = extract(source, 'markdown');
+    expect(links.map(l => l.url)).toEqual(['https://example.com/a']);
+    assertSpansRoundtrip(source, links);
+  });
+
+  it('a sentence closing paren after a balanced URL is stripped once', () => {
+    const source = '(see https://example.com/a_(b))';
+    const links = extract(source, 'markdown');
+    expect(links.map(l => l.url)).toEqual(['https://example.com/a_(b)']);
+    assertSpansRoundtrip(source, links);
+  });
+
+  it('titles after the destination still work', () => {
+    for (const title of ['"t"', "'t'", '(t)']) {
+      const source = `[x](${wiki} ${title})`;
+      const links = extract(source, 'markdown');
+      expect(links.map(l => l.url)).toEqual([wiki]);
+      assertSpansRoundtrip(source, links);
+    }
+  });
+
+  it('angle-bracket destination may hold spaces and parentheses', () => {
+    const url = 'https://example.com/a b_(c';
+    const source = `[x](<${url}>)`;
+    const links = extract(source, 'markdown');
+    expect(links.map(l => l.url)).toEqual([url]);
+    assertSpansRoundtrip(source, links);
+  });
+
+  it('angle-bracket reference definition span excludes the brackets', () => {
+    const source = `[a][r]\n\n[r]: <${wiki}>`;
+    const links = extract(source, 'markdown');
+    expect(links.map(l => l.url)).toEqual([wiki]);
+    assertSpansRoundtrip(source, links);
+  });
+
+  it('HTML href keeps parentheses', () => {
+    const source = `<a href="${wiki}">x</a>`;
+    const links = extract(source, 'html');
+    expect(links.map(l => l.url)).toEqual([wiki]);
+    assertSpansRoundtrip(source, links);
+  });
+});
+
+describe('extract – URLs without a host', () => {
+  it('ignores scheme fragments in prose', () => {
+    const source = 'Plain http:// links and https:// links, or "https://".';
+    expect(extract(source, 'markdown')).toHaveLength(0);
+  });
+
+  it('ignores an empty host in inline links, autolinks and HTML', () => {
+    expect(extract('[x](http://)', 'markdown')).toHaveLength(0);
+    expect(extract('<https://>', 'markdown')).toHaveLength(0);
+    expect(extract('<a href="https:///path">x</a>', 'html')).toHaveLength(0);
+  });
+});
+
+// ---------------------------------------------------------------------------
 // Mixed content edge cases
 // ---------------------------------------------------------------------------
 

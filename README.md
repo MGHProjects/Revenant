@@ -270,15 +270,90 @@ web          Vite app: the graveyard
 Imports go one way: `worker`, `cli`, `mcp` and `web` use `net`, and `net` uses `core`. Because
 `src/core` is pure, its correctness properties are tested with fast-check.
 
+## Field test
+
+Run on 26 Nov 2026, from source at commit `e35b928`. The working tree had uncommitted changes:
+the fixes described below were not yet committed.
+
+**Method.** The first 200 links of four public READMEs, one README at a time, with
+`revenant <owner/repo> --json` on a local machine (Node 22). No `GITHUB_TOKEN`. Requests to the
+Internet Archive went one at a time with a 1 s gap. After each run I opened every dead and
+possessed link myself (an HTTP request that follows redirects, a DNS lookup, and for possessed
+links a look at the archived copy) and classified it. Here, a **true positive** means the page
+the author cited can no longer be read at that address. A **false alarm** means the cited
+content can still be read at the place the link leads to. **Unclear** means I could not decide
+from a few requests.
+
+| README | Links scanned | Alive | Dead | Possessed | Restless | Dead or possessed with an archived copy |
+|---|---|---|---|---|---|---|
+| mtdvio/every-programmer-should-know | 200 | 176 | 7 | 1 | 16 | 8 of 8 |
+| kdeldycke/awesome-falsehood | 168 | 162 | 1 | 0 | 5 | 1 of 1 |
+| donnemartin/system-design-primer | 200 | 160 | 3 | 11 | 26 | 14 of 14 |
+| danistefanovic/build-your-own-x | 200 | 177 | 4 | 2 | 17 | 6 of 6 |
+| Total | 768 | 675 | 15 | 14 | 64 | 29 of 29 |
+
+No link in these runs finished with the archive unreachable.
+
+**The first run.** On 26 Nov 2026 the same four READMEs were scanned with the deployed version
+before these fixes. That run, which is not part of the table above, scanned 768 links and flagged 28
+as dead or possessed. 11 of the 28 were false alarms, of three kinds. Each became a rule and a test:
+
+1. Markdown links with parentheses were cut at the first `)`. Five Wikipedia links in
+   system-design-primer were judged dead. Task 18.1: the extractor now reads the whole
+   destination with balanced parentheses. Covered by Property 18 in
+   `test/extract.prop.test.ts` and by the parentheses cases in `test/extract.test.ts`.
+2. Renames were judged possessed: five `twitter.com` status links to x.com in awesome-falsehood
+   and `exercism.io` to `exercism.org` in every-programmer-should-know. Task 18.2: the same name
+   under another suffix, and a short list of known renames (`src/core/known-renames.ts`), are
+   `alive`; a live page with too little text to compare is `restless`. Covered by
+   Properties 6h, 6i and 6j in `test/classify.prop.test.ts` and by `test/judge-rename.test.ts`.
+3. The Internet Archive throttled bulk scans, so archive lookups failed and dead links got no
+   archived copy (13 cross-domain links "archive could not be reached" in system-design-primer, 4 links
+   to web.archive.org "Connection failed", 7 of 8 dead links without a copy, and 4 of 4 in
+   build-your-own-x). Task 18.3: every request to the archive goes through one queue with a minimum gap and
+   `Retry-After`, and `scan()` asks once more for the judgements whose archive answer was
+   unavailable. Covered by `test/archive-queue.test.ts`, `test/archive-queue-clients.test.ts`
+   and, for the final retry, Property 19 in `test/scan-retry.test.ts`.
+
+**This run.** The READMEs themselves may have changed since the first run, so the two runs
+are not a before and after on identical input. The first run found 28 flagged links of 768; this
+one found 29 of 768. None of the 29 is a Wikipedia, `twitter.com` or `exercism.io` link, none has
+`archiveUnavailable`, and all 29 have an archived copy. My classification of the 29:
+
+| Classification | Count | Links |
+|---|---|---|
+| True positive | 18 | 15 dead links (9 answer 404, 6 on hosts that do not resolve), and 3 nginx.com pages that now redirect to the generic F5 NGINX product page |
+| False alarm | 6 | The cited content can be read at the new address: targetprocess.com (now apptio.com), nginx.com HTTP glossary page (now f5.com), consul.io docs (now developer.hashicorp.com), puncsky.com (now tianpan.co), varnish-cache.org (now varnish.org), developers.google.com/protocol-buffers (now protobuf.dev) |
+| Unclear | 5 | nginx.com reverse-proxy-vs-load-balancer (f5.com has an entry on reverse proxies, not the same article), coreos.com/etcd/docs (now the etcd.io home page), consul.io getting-started checks (now a different tutorial), handmadehero.org (now a section of mollyrocket.com), scottlilly.com/build-a-cwpf-rpg (now the home page of soscsrpg.com) |
+
+Of the 15 dead links, 9 answer 404 and 6 are on hosts that do not resolve: `katemats.com` (no
+address record), `sci-hub.se`, `ucoder.com.br`, and three pages on `codeslinger.co.uk`. By README:
+every-programmer-should-know has 7 true positives and 1 false alarm; awesome-falsehood has 1 true
+positive; system-design-primer has 6 true positives, 5 false alarms and 3 unclear;
+build-your-own-x has 4 true positives and 2 unclear.
+
+**What remains.** All 6 false alarms are possessed verdicts on a company or project that moved
+to a new domain, sometimes after an acquisition or a site redesign. The text of the new page is
+different enough from the archived one that the similarity falls under 20%, so the engine cannot
+tell a rewritten page from a replaced one. The 5 unclear links are the same pattern with a weaker
+match. Redirects of nginx.com, consul.io and coreos.com are still reported possessed, which is
+right when the page you cited is gone and wrong when the new site holds the same article, and
+Revenant does not tell these apart. Of the 64 restless links, 55 answered 403 to robots, 4 did not answer
+within 8 s, 2 answered 429, and one each answered 451, failed to connect, or redirected to a page
+with too little text to compare. Revenant never calls these dead, so a site that blocks robots
+stays unchecked. I did not open the 64 restless links by hand.
+
 ## Limits worth knowing
 
 - `possessed` is only detected when the link redirects to another registrable domain. A hijacked domain that serves new content at the same address is reported `alive`.
+- A redirect to the same name under another suffix (`exercism.io` to `exercism.org`) or to a known rename (`twitter.com` to `x.com`, `repl.it` to `replit.com`) is reported `alive`, not `possessed`. That is a blind spot: a squatter who owns the same name under another suffix (`foo.com` to `foo.net`) is reported `alive` too, and the known-rename list is short.
 - Pages decay before they die, so Revenant opens a copy from up to a year before the last capture; See every capture shows the rest.
 - A scan covers at most 200 links. The web app says so when the cap is hit.
 - The Worker runs on the Cloudflare free plan, so `POST /api/scan` accepts at most 3 URLs per request. The web app sends batches of 3, two at a time.
 - In the Worker, text similarity compares only the first 64 KB of visible text on each side. The CLI and MCP server run on Node and use the same core.
 - Response bodies are read up to 512 KB. Outbound requests have an 8 s timeout and follow at most 5 redirects.
 - The Worker keeps Wayback answers for 24 h in memory only. It does not use the Cache API, because those calls count toward the free plan's 50 subrequests per request. The memory lives inside one Worker isolate, so a later request can miss the cache and ask the archive again.
+- Requests to the Internet Archive are made one at a time, so a large scan takes longer.
 - The Wayback Machine can throttle the Worker (HTTP 429) or time out under bursts of requests. A link that needed the archive for comparison is then `restless`, not `dead` or `possessed`. Repeated back-to-back CLI runs can show more `restless` links than a single run.
 - For `owner/repo` input, Revenant first tries `raw.githubusercontent.com` on the default branch for `README.md`, `readme.md`, `README`, `Readme.md` and `README.markdown`, which GitHub does not rate-limit. Only if none exists does it call the GitHub API (for READMEs with another name or in `docs/`). The unauthenticated API allows 60 requests per hour per IP, so set `GITHUB_TOKEN` in the CLI environment to raise that; the token is sent to the API only. If GitHub still rate-limits the request, the web app asks you to paste the document.
 - Outbound requests are limited to http and https hosts by name. IP literals, `localhost`, `*.local`, `*.internal`, `*.localhost` and URLs with credentials are refused, and the link is `restless` (not checked).

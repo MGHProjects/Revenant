@@ -3,7 +3,7 @@
  *
  * Routes:
  *   POST /api/scan    — accept { urls: string[] } (max 3), return { judgements: Judgement[] }
- *   POST /api/resolve — accept { input: string, kind: 'url' | 'repo' }, return { source, kind }
+ *   POST /api/resolve — accept { input: string, kind: 'url' | 'repo' }, return { source, kind, file? } (file: repo scans only)
  *
  * Free-plan constraints (50 subrequests, 10 ms CPU per request): max 3 URLs per /api/scan call,
  * 64 KB text cap per side. Worst case is 16 subrequests per URL (PER_URL_WORST_CASE), 3 x 16 = 48,
@@ -13,7 +13,8 @@
  */
 
 import { Hono } from 'hono';
-import { fetcher } from '../net/fetcher.js';
+import { ARCHIVE_MIN_GAP_MS, createArchiveQueue } from '../net/archive-queue.js';
+import { createFetcher, fetcher } from '../net/fetcher.js';
 import { resolveRepoReadme } from '../net/github-readme.js';
 import { defaultSleep, judgeLink } from '../net/judge-link.js';
 import { MAX_BODY_BYTES as FETCH_MAX_BYTES } from '../net/read-capped.js';
@@ -85,7 +86,14 @@ app.post('/api/scan', async (c) => {
     const validUrls = urls as string[];
 
     // ---- Judge up to 3 URLs concurrently (guard included), order preserved ----
-    const deps = { fetcher, wayback: createWaybackClient(), sleep: defaultSleep };
+    // One archive queue per request (no state shared between requests), 300 ms between starts.
+    // The fetcher (links on web.archive.org) and the Wayback client wait in the same line.
+    const queue = createArchiveQueue({ minGapMs: ARCHIVE_MIN_GAP_MS.worker });
+    const deps = {
+      fetcher: createFetcher({ archiveQueue: queue }),
+      wayback: createWaybackClient({ queue }),
+      sleep: defaultSleep,
+    };
     const judgements: Judgement[] = await Promise.all(
       validUrls.map(url => judgeLink({ url, spans: [] }, deps, { textCap: SNAPSHOT_TEXT_CAP })),
     );
@@ -161,7 +169,11 @@ app.post('/api/resolve', async (c) => {
     if (kind === 'repo') {
       const result = await resolveRepoReadme(input, undefined, c.env?.GITHUB_TOKEN);
       if (result.ok) {
-        return c.json({ source: result.source, kind: result.kind });
+        return c.json(
+          result.file
+            ? { source: result.source, kind: result.kind, file: result.file }
+            : { source: result.source, kind: result.kind },
+        );
       }
       const status = { 'not-found': 404, 'rate-limited': 429, invalid: 400, unavailable: 502 } as const;
       return c.json({ error: result.message }, status[result.code]);

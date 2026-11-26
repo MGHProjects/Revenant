@@ -13,13 +13,18 @@
  *
  * Bodies: read through readCapped (512 KB, stream cancelled at the cap, truncated body used as
  *         complete). Bodies of 429 and other non-2xx answers are cancelled unread.
- * 429 back-off: reads Retry-After (capped at 10 s), waits, retries once.
- * Timeout: 10 s on all Wayback requests, body read included; on failure returns 'unavailable'.
+ * Queue: every request (CDX, id_ body, availability API) goes through one ArchiveQueue (see
+ *        archive-queue.ts): one at a time, a minimum gap between starts, Retry-After honoured.
+ * 429 back-off: Retry-After (capped at 10 s) holds back the whole queue; the request is retried once.
+ * Timeout: 10 s per request from the moment it starts (queue waiting excluded), body read included;
+ *          on failure returns 'unavailable'.
  * An empty CDX answer (archive reachable, no 200 capture) returns 'none'.
  */
 
 import { chooseLife } from '../core/lives.js';
 import { visibleText } from '../core/visible-text.js';
+import { createArchiveQueue, parseRetryAfter } from './archive-queue.js';
+import type { ArchiveQueue } from './archive-queue.js';
 import { decodeUtf8, discardBody, readCapped } from './read-capped.js';
 import { USER_AGENT } from './user-agent.js';
 import type { ArchiveAnswer, Capture, ChosenLife, ClosestSnapshot, EpitaphResult, SnapshotResult, Wayback } from '../core/types.js';
@@ -86,10 +91,6 @@ function timestampToDate(ts: string): string {
 // Low-level fetch with timeout, retry-after, and 429 back-off
 // ---------------------------------------------------------------------------
 
-async function sleep(ms: number): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, ms));
-}
-
 interface WaybackResponse {
   ok: boolean;
   status: number;
@@ -97,60 +98,64 @@ interface WaybackResponse {
   retryAfterMs?: number;
 }
 
-async function waybackFetch(url: string): Promise<WaybackResponse | undefined> {
-  const controller = new AbortController();
-  // The timeout also covers the body read, so a stalled stream cannot hold a connection.
-  const timer = setTimeout(() => controller.abort(), TIMEOUT_MS);
-
+/**
+ * One request through the archive queue. The 10 s timeout starts when the request starts (not
+ * when it was queued) and covers the body read. A 429 or 503 with Retry-After holds back the next
+ * request for every caller of the queue.
+ */
+async function waybackFetch(url: string, queue: ArchiveQueue): Promise<WaybackResponse | undefined> {
   try {
-    const response = await fetch(url, {
-      signal: controller.signal,
-      headers: { 'User-Agent': USER_AGENT },
-    });
+    return await queue.run(async signal => {
+      try {
+        const response = await fetch(url, {
+          signal,
+          headers: { 'User-Agent': USER_AGENT },
+        });
 
-    if (response.status === 429) {
-      await discardBody(response);
-      const retryAfterRaw = response.headers.get('Retry-After');
-      let retryAfterMs = 1000; // default 1 s if header absent
-      if (retryAfterRaw) {
-        const seconds = parseFloat(retryAfterRaw);
-        if (!isNaN(seconds)) {
-          retryAfterMs = Math.min(seconds * 1000, MAX_RETRY_AFTER_MS);
+        const header = parseRetryAfter(response.headers.get('Retry-After'), queue.clock.now());
+        if (response.status === 429 || response.status === 503) {
+          // Both slow the whole queue down when the archive says how long.
+          if (header !== undefined) queue.penalize(header);
         }
+
+        if (response.status === 429) {
+          await discardBody(response);
+          // 1 s default when the header is absent.
+          const retryAfterMs = header ?? 1000;
+          if (header === undefined) queue.penalize(retryAfterMs);
+          return { ok: false, status: 429, text: '', retryAfterMs };
+        }
+
+        // The body of a non-2xx answer is never used: release the connection.
+        if (!response.ok) {
+          await discardBody(response);
+          return { ok: false, status: response.status, text: '' };
+        }
+
+        // Capped at 512 KB; a longer body is cut and used as if complete.
+        const text = decodeUtf8(await readCapped(response));
+        return { ok: true, status: response.status, text };
+      } catch {
+        return undefined; // network error or timeout
       }
-      return { ok: false, status: 429, text: '', retryAfterMs };
-    }
-
-    // The body of a non-2xx answer is never used: release the connection.
-    if (!response.ok) {
-      await discardBody(response);
-      return { ok: false, status: response.status, text: '' };
-    }
-
-    // Capped at 512 KB; a longer body is cut and used as if complete.
-    const text = decodeUtf8(await readCapped(response));
-    return { ok: true, status: response.status, text };
+    }, { timeoutMs: TIMEOUT_MS });
   } catch {
-    return undefined; // network error or timeout
-  } finally {
-    clearTimeout(timer);
+    return undefined; // the queue released a request that outlived its timeout
   }
 }
 
 /**
- * Fetch a Wayback URL with automatic 429 back-off (one retry).
- * Returns the response text on success, undefined on timeout/error,
- * and throws a special symbol on permanent failure after retry.
+ * Fetch a Wayback URL through the queue with one retry after a 429. The retry is a new queue
+ * entry, so it starts only after the Retry-After the first answer set.
+ * Returns the response text on success, undefined on timeout, error or a second failure.
  */
-async function waybackFetchWithRetry(url: string): Promise<string | undefined> {
-  const first = await waybackFetch(url);
+async function waybackFetchWithRetry(url: string, queue: ArchiveQueue): Promise<string | undefined> {
+  const first = await waybackFetch(url, queue);
 
   if (first === undefined) return undefined; // timeout / network error
 
   if (first.status === 429) {
-    // Wait and retry once
-    await sleep(first.retryAfterMs ?? 1000);
-    const second = await waybackFetch(url);
+    const second = await waybackFetch(url, queue);
     if (second === undefined || !second.ok) return undefined;
     return second.text;
   }
@@ -158,7 +163,6 @@ async function waybackFetchWithRetry(url: string): Promise<string | undefined> {
   if (!first.ok) return undefined;
   return first.text;
 }
-
 // ---------------------------------------------------------------------------
 // CDX query
 // ---------------------------------------------------------------------------
@@ -167,9 +171,9 @@ async function waybackFetchWithRetry(url: string): Promise<string | undefined> {
  * Fetch the monthly-collapsed CDX list for a URL and pick the longest life (see core/lives.ts).
  * 'none' = archive answered with no capture; 'unavailable' = could not be reached or bad reply.
  */
-async function fetchLife(targetUrl: string): Promise<ChosenLife | 'none' | 'unavailable'> {
+async function fetchLife(targetUrl: string, queue: ArchiveQueue): Promise<ChosenLife | 'none' | 'unavailable'> {
   const cdxUrl = `${CDX_BASE}&url=${encodeURIComponent(targetUrl)}`;
-  const text = await waybackFetchWithRetry(cdxUrl);
+  const text = await waybackFetchWithRetry(cdxUrl, queue);
   if (text === undefined) return 'unavailable';
 
   let rows: unknown;
@@ -212,8 +216,8 @@ function loadEntry(url: string): WaybackCacheEntry | undefined {
 }
 
 /** Populate a fresh cache entry for a URL by querying CDX. */
-async function buildEntry(url: string): Promise<WaybackCacheEntry> {
-  const life = await fetchLife(url);
+async function buildEntry(url: string, queue: ArchiveQueue): Promise<WaybackCacheEntry> {
+  const life = await fetchLife(url, queue);
 
   const entry: WaybackCacheEntry = {
     cachedAt: Date.now(),
@@ -248,12 +252,12 @@ function cacheKey(url: string): string {
   return `${URL_PREFIX}${encodeURIComponent(url)}`;
 }
 
-async function getEntry(url: string): Promise<WaybackCacheEntry> {
+async function getEntry(url: string, queue: ArchiveQueue): Promise<WaybackCacheEntry> {
   const key = cacheKey(url);
   const existing = loadEntry(key);
   if (existing) return existing;
 
-  const entry = await buildEntry(url);
+  const entry = await buildEntry(url, queue);
 
   // 'unavailable' is transient: never cached, so a retry asks the archive again.
   if (entry.epitaph === 'unavailable') return entry;
@@ -266,14 +270,24 @@ async function getEntry(url: string): Promise<WaybackCacheEntry> {
 // Public factory
 // ---------------------------------------------------------------------------
 
+export interface WaybackClientOptions {
+  /**
+   * The queue every request goes through. Share it with the fetcher (createFetcher) so links to
+   * web.archive.org wait in the same line. Without one the client gets its own queue with no gap
+   * (still one request at a time).
+   */
+  queue?: ArchiveQueue;
+}
+
 /**
  * Create a Wayback Machine client. Calls go straight to the platform `fetch`,
- * not through the core `Fetcher` abstraction.
+ * not through the core `Fetcher` abstraction, but always through the archive queue.
  */
-export function createWaybackClient(): Wayback {
+export function createWaybackClient(options: WaybackClientOptions = {}): Wayback {
+  const queue = options.queue ?? createArchiveQueue({ minGapMs: 0 });
   /** One CDX request (or one cache hit) gives the epitaph and the resurrection together. */
   async function archiveOf(url: string): Promise<ArchiveAnswer> {
-    const entry = await getEntry(url);
+    const entry = await getEntry(url, queue);
     const epitaph = entry.epitaph ?? 'unavailable';
     // Both or neither: a resurrection only travels with a dated epitaph.
     if (typeof epitaph === 'object' && entry.resurrection !== undefined) {
@@ -288,7 +302,7 @@ export function createWaybackClient(): Wayback {
       const api =
         `https://archive.org/wayback/available?url=${encodeURIComponent(url)}` +
         (ts ? `&timestamp=${ts}` : '');
-      const text = await waybackFetchWithRetry(api);
+      const text = await waybackFetchWithRetry(api, queue);
       if (text === undefined) return { status: 'unreachable' };
       try {
         const body = JSON.parse(text) as {
@@ -336,7 +350,7 @@ export function createWaybackClient(): Wayback {
       // Raw snapshot (id_ suppresses Wayback toolbar)
       const snapshotUrl = `${WAYBACK_BASE}/${timestamp}id_/${url}`;
 
-      const html = await waybackFetchWithRetry(snapshotUrl);
+      const html = await waybackFetchWithRetry(snapshotUrl, queue);
 
       // A failed body fetch is transient: report it, but do not cache it.
       if (html === undefined) return { status: 'unavailable' };

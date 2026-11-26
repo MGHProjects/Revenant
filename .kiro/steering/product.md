@@ -37,6 +37,6 @@ document, or runs the same engine as a CLI in CI, or as an MCP tool inside an ag
 ## Principles
 
 - **Never cry wolf.** A false "dead" costs trust. When unsure, the verdict is `restless`.
-- **The costume is the interface.** Every spooky element encodes state. Nothing is decoration only.
+- **The costume is the interface.** Every spooky element on the ground encodes state; the static horizon is the only scenery.
 - **One engine, three doors.** Web, CLI and MCP call the same pure core. No logic lives in a door.
 - Hackathon category: **Costume Contest** (Kiroween 2026).

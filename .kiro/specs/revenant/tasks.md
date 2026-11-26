@@ -197,7 +197,7 @@ Build Revenant as a TypeScript ESM project targeting Cloudflare Workers (web + W
     - _Requirements: 6, 7, 8_
   - [x] 15.13 Epitaph and resurrection come from one archive answer. A local sample scan gave dmoz.org a resurrection but no epitaph (blank stone, ledger "Archived copy"). One CDX answer yields both, or neither; a judgement never has a resurrection without an epitaph. Test the 429-then-success sequence.
     - _Requirements: 3.1, 3.2_
-- [ ] 16. Production review fixes
+- [x] 16. Production review fixes
   - [x] 16.1 Resurrection steps back from the end of the life. In `chooseLife`, after the longest life: span = calendar months first to last; margin = min(12, floor(span / 4)); candidates = captures at or before (last month - margin); copy = last candidate with length at least half the candidates' median, else the last candidate; one capture returns itself. The stone's years and height keep the whole life; the copy date is a separate field and the inscription reads "copy from {date}". Expected on the real series: dmoz 20170301000315, freebase 20150501201938, codeplex 20170101075357, geocities/SiliconValley 19990202115713. Property tests, the dmoz tail test, and updates to requirements.md, design.md, costume.md and the README limits.
     - _Requirements: 3.1, 3.2_
   - [x] 16.2 Repository README without the GitHub API. `resolveRepoReadme` asks `raw.githubusercontent.com/{owner}/{repo}/HEAD/{name}` first for README.md, readme.md, README, Readme.md, README.markdown, stopping at the first 200; the API only when all are 404, with `GITHUB_TOKEN` when the environment has it. Distinct "not found" and "rate limit" errors stay.
@@ -210,9 +210,41 @@ Build Revenant as a TypeScript ESM project targeting Cloudflare Workers (web + W
     - _Requirements: 6.2_
   - [x] 16.6 A graveyard has an address. `/?repo=owner/name` and `/?url=https://...` fill the address field and scan on load; a scan started from the address field writes that parameter with `history.replaceState` and shows a "Copy link" button near the status. A pasted document never goes into the URL. Two example links in the README "Try it".
     - _Requirements: 1.3, 6.1_
-  - [-] 16.7 Finish 15.12. Fix the four README lines still wrong ("persistent 5xx", "401 to robots", `<owner>`, "human-written requirements and design brief") plus the rest of the 15.12 text, verified in the file. Retake the three screenshots from production after 16.1 to 16.5 are deployed.
+  - [x] 16.7 Finish 15.12. Fix the four README lines still wrong ("persistent 5xx", "401 to robots", `<owner>`, "human-written requirements and design brief") plus the rest of the 15.12 text, verified in the file. Retake the three screenshots from production after 16.1 to 16.5 are deployed.
     - _Requirements: 6, 7, 8_
   - [x] 16.8 Kiro guards its own documents, and the build has a log. A hook in `.kiro/hooks` runs Revenant's CLI on `README.md` (report every dead or possessed link) and on files in `samples/` (report only links whose verdict differs from the expected-verdicts comment) when they are saved, and feeds the result back to the agent. `docs/build-log.md` describes how the project was built with Kiro, section by section, with a file or commit for every fact; hook runs are described by configuration, not invented catches; Claude's contributions are stated plainly.
+    - _Requirements: 7_
+- [ ] 17. Night scenery from the updated design reference
+  - [x] 17.1 Sky and moonlight. Port from `docs/design/canvas/project/Main.dc.html` (CSS values and SVG paths exactly; no mock data, scan simulation, templating or Google Fonts). The header becomes `.sky` (gradient from ink to `#1e2a47` at the horizon, overflow hidden); the moon sits in `.moonbox` with a `.glow` behind it whose opacity is the scan progress, the same value that moves the moon's shade.
+    - _Requirements: 6.1_
+  - [x] 17.2 Horizon. A static, `aria-hidden` `.horizon` band between the hero and the yard: far hill (SVG, stretched), bare tree (SVG), iron fence (CSS gradients, two segments that stop at the gate), gate (SVG), positioned with `--edge` and `--gate`, using only ink and `#141b2d`. Nothing in it moves.
+    - _Requirements: 6.1_
+  - [x] 17.3 Ground and mist. The yard moves into `.ground` with a `.mist` layer behind the plots. Mist opacity = (links still waiting + restless links) / total links, 1 before any scan, from a pure tested function ((9,0,0) gives 1; (9,3,0) gives 0.67; (9,9,2) gives 0.22; (0,0,0) gives 1). The two mist layers drift with transform only (90 s and 140 s) and do not drift under reduced motion.
+    - _Requirements: 6.1, 6.7_
+  - [x] 17.4 First row in front of the fence. `.yard` has `margin-top: -40px` and `min-height: 150px`; `.ground` has `display: flow-root` so the margin does not collapse. Rows after the first are unchanged.
+    - _Requirements: 6.1_
+  - [x] 17.5 Stones catch the moon: the reference's gradient and inset highlight on `.stone`. No other figure changes.
+    - _Requirements: 6.2_
+  - [x] 17.6 Narrow screens (max-width 760px): the reference's media-query rules. Gate and right fence segment hidden, smaller tree, horizon 104px tall.
+    - _Requirements: 6.1_
+  - [x] 17.7 Checks. The sticky inscription stays above the mist. First-row host and verdict labels keep 4.5:1 contrast against the mist at full opacity at 1440, 1024 and 375 px. No horizontal scroll at any width.
+    - _Requirements: 6.7, 6.8_
+  - [x] 17.8 Steering. `costume.md`: mist is what has not been judged, moonlight follows progress, and a "Scenery" rule (static, ink only, `aria-hidden`, never animated, never a verdict shape or colour). `product.md`: "Every spooky element on the ground encodes state; the static horizon is the only scenery." The Costume check hook prompt in `.kiro/hooks/quality.json` applies the Scenery rule so it does not flag the horizon.
+    - _Requirements: 6_
+  - [~] 17.9 Retake the three README screenshots and `og.png` from production after section 17 is deployed; fill the caption date. Say so if `og.png` cannot be rendered.
+    - _Requirements: 6_
+- [x] 18. Field test fixes
+  - [x] 18.1 Markdown link destinations with parentheses. The extractor ends a URL at the first `)`, so `https://en.wikipedia.org/wiki/Load_balancing_(computing)` is cut and judged dead. Fix `extract` so the URL and its span cover the whole destination (balanced parentheses, CommonMark), also for bare URLs ending in a balanced `)`. Property test: any URL with balanced parentheses inside `[text](url)` is extracted exactly and `patch` replaces exactly that span.
+    - _Requirements: 1.1, 1.2, 4.2_
+  - [x] 18.2 A rename is not a possession. Same registrable name under another public suffix (exercism.io to exercism.org) is alive, "Moved to {domain}."; a short documented list of known renames in `src/core` (twitter.com to x.com) is alive, "Moved to x.com."; when the live page has too little visible text to compare (threshold chosen from measured real pages) the verdict is restless, "Redirects to {domain}; the new page has too little text to compare. Not judged."; geocities.com to yahoo.com and codeplex.com to microsoft.com stay possessed. Update requirements.md, design.md and the properties; README limits note the blind spot.
+    - _Requirements: 2.5, 2.7, 2.8_
+  - [x] 18.3 The Internet Archive throttles bulk scans. Every request to web.archive.org (CDX, snapshot bodies, links whose host is web.archive.org) goes through one queue: one at a time, a minimum gap (1 s in CLI and MCP, 300 ms in the Worker, one constant), `Retry-After` honoured. At the end of `scan()`, ask once more for the judgements whose archive answer was unavailable. Re-run the CLI on donnemartin/system-design-primer: dead links should have copies.
+    - _Requirements: 3.3, 3.4, 5_
+  - [x] 18.4 The page says who it is for. Empty-state headline "Bring your dead links back." with the new explanation; the address field moves into the hero as the main input (label "GitHub repo or page address", placeholder "owner/repo or https://...", primary "Scan its links"), a "Try:" row with three repo links, "Scan the sample" as a secondary button; the textarea stays below, labelled "Or paste a document", with "Scan the document" secondary. When a scan ends the headline states the result ("{gone} of {total} links are gone. {fixable} can come back." / "All {total} links still lead where they should." / "{n} could not be judged."), with singular forms.
+    - _Requirements: 6.1, 6.9_
+  - [x] 18.5 From verdict to fix. A "Copy patched document" button next to "Download patched document", announced in the live region. When the scan came from a repo, `/api/resolve` also returns the README's file name; show "Open {file} on GitHub" (edit URL if it can be shown to work, otherwise `/blob/HEAD/{file}`), and three short steps next to the buttons.
+    - _Requirements: 4.1, 6.6_
+  - [x] 18.6 Field test in the README. After 18.1 to 18.3, run the CLI again on the four READMEs (first 200 links each) and add a "Field test" section to README.md: date, method, totals per verdict, and the story of this round (28 flagged, 11 false alarms of three kinds, each became a rule and a test). Only numbers from our own runs.
     - _Requirements: 7_
 ## Notes
 
@@ -277,7 +309,22 @@ Build Revenant as a TypeScript ESM project targeting Cloudflare Workers (web + W
     { "id": 45, "tasks": ["16.5"] },
     { "id": 46, "tasks": ["16.6"] },
     { "id": 47, "tasks": ["16.7"] },
-    { "id": 48, "tasks": ["16.8"] }
+    { "id": 48, "tasks": ["16.8"] },
+    { "id": 49, "tasks": ["17.1"] },
+    { "id": 50, "tasks": ["17.2"] },
+    { "id": 51, "tasks": ["17.3"] },
+    { "id": 52, "tasks": ["17.4"] },
+    { "id": 53, "tasks": ["17.5"] },
+    { "id": 54, "tasks": ["17.6"] },
+    { "id": 55, "tasks": ["17.7"] },
+    { "id": 56, "tasks": ["17.8"] },
+    { "id": 57, "tasks": ["17.9"] },
+    { "id": 58, "tasks": ["18.1"] },
+    { "id": 59, "tasks": ["18.2"] },
+    { "id": 60, "tasks": ["18.3"] },
+    { "id": 61, "tasks": ["18.4"] },
+    { "id": 62, "tasks": ["18.5"] },
+    { "id": 63, "tasks": ["18.6"] }
   ]
 }
 ```

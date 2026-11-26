@@ -10,7 +10,8 @@
 import { describe, it } from 'vitest';
 import * as fc from 'fast-check';
 import { extract } from '../src/core/extract.js';
-import type { Link } from '../src/core/types.js';
+import { patch } from '../src/core/patch.js';
+import type { Judgement, Link } from '../src/core/types.js';
 
 // ---------------------------------------------------------------------------
 // Arbitrary: a valid http/https URL with no special markdown characters
@@ -409,6 +410,66 @@ describe('Property 9: Deduplication invariant', () => {
         return true;
       }),
       { numRuns: 100 },
+    );
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Property 18: Balanced parentheses survive extraction and patching
+// ---------------------------------------------------------------------------
+
+const arbWord = fc.stringMatching(/^[A-Za-z0-9_]{1,6}$/);
+
+/** One parenthesis group: flat, nested two deep or nested three deep. */
+const arbGroup: fc.Arbitrary<string> = fc.oneof(
+  arbWord.map(a => `(${a})`),
+  fc.tuple(arbWord, arbWord).map(([a, b]) => `(${a}(${b}))`),
+  fc.tuple(arbWord, arbWord, arbWord).map(([a, b, c]) => `(${a}(${b}(${c})))`),
+);
+
+/** URL with 0 to 3 balanced parenthesis groups in its path, possibly nested. */
+const arbParenUrl: fc.Arbitrary<string> = fc
+  .tuple(
+    arbSafeUrl,
+    fc.array(fc.tuple(arbWord, arbGroup), { minLength: 0, maxLength: 3 }),
+    fc.option(arbWord, { nil: '' }),
+  )
+  .map(([base, groups, tail]) => `${base}/${groups.map(([w, g]) => w + g).join('')}${tail}`);
+
+describe('Property 18: Balanced parentheses survive extraction and patching', () => {
+  it('extract returns the whole destination and patch replaces exactly that span', () => {
+    // Feature: revenant, Property 18: Balanced parentheses survive extraction and patching
+    // **Validates: Requirements 1.1, 1.2, 4.2**
+    fc.assert(
+      fc.property(
+        arbParenUrl,
+        fc.stringMatching(/^[a-z ]{0,12}$/),
+        fc.stringMatching(/^[a-z ,.]{0,12}$/),
+        fc.constantFrom('', ' "title"', " 'title'", ' (title)'),
+        (url, before, after, title) => {
+          const prefix = `${before}[text](`;
+          const source = `${prefix}${url}${title}) ${after}`;
+
+          const links = extract(source, 'markdown');
+          if (links.length !== 1) return false;
+          const link = links[0]!;
+          if (link.url !== url || link.spans.length !== 1) return false;
+          const { start, end } = link.spans[0]!;
+          if (source.slice(start, end) !== url) return false;
+          if (start !== prefix.length) return false;
+
+          const resurrection = `https://web.archive.org/web/2020/${url}`;
+          const judgement: Judgement = {
+            link,
+            verdict: 'dead',
+            reason: 'gone',
+            resurrection,
+          };
+          const patched = patch(source, [judgement], new Set());
+          return patched === source.slice(0, start) + resurrection + source.slice(end);
+        },
+      ),
+      { numRuns: 200 },
     );
   });
 });

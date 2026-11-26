@@ -8,6 +8,8 @@
  *   2. extract(source, kind) → Link[]
  *   3. Cap at 200 links; emit meta event.
  *   4. Pool of 6 over judgeLink (src/net/judge-link.ts): guard, fetch, retry, classify, epitaph.
+ *   5. Once more, for exactly the judgements flagged archiveUnavailable: a later `judgement` event for
+ *      the same URL replaces the earlier one.
  *
  * Requirements: 1.3, 1.4, 1.6, 1.7, 2.2, 5.4
  */
@@ -17,6 +19,7 @@ import { resolveRepoReadme } from './github-readme.js';
 import { defaultSleep, judgeLink } from './judge-link.js';
 import type {
   Fetcher,
+  Link,
   ScanEvent,
   Wayback,
 } from '../core/types.js';
@@ -145,7 +148,17 @@ export async function* scan(
   // ---- Step 4: Pool of 6 (judgeLink guards, fetches, retries, classifies) ----
 
   const deps = { fetcher, wayback, sleep: defaultSleep };
+  const unavailable: Link[] = [];
   for await (const judgement of poolMap(links, POOL_SIZE, link => judgeLink(link, deps))) {
+    if (judgement.archiveUnavailable) unavailable.push(judgement.link);
+    yield { type: 'judgement', judgement };
+  }
+
+  // ---- Step 5: one final retry for the links the archive could not answer ----
+  // Same deps, same pool size; the archive queue (inside fetcher and wayback) still serialises
+  // the archive work. Each answer supersedes the earlier judgement of the same URL. No further
+  // retry follows, whatever the answer.
+  for await (const judgement of poolMap(unavailable, POOL_SIZE, link => judgeLink(link, deps))) {
     yield { type: 'judgement', judgement };
   }
 }

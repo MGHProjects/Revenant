@@ -8,7 +8,6 @@
 
 import type { Judgement, Link, Verdict } from '../src/core/types.js';
 import { extract } from '../src/core/extract.js';
-import { patch } from '../src/core/patch.js';
 import sample from '../samples/haunted-readme.md?raw';
 import {
   LABEL,
@@ -21,9 +20,13 @@ import {
   toGraveView,
   type GraveView,
 } from './scene.js';
+import { mistOpacity } from './mist.js';
 import { chunk, mergeJudgement, retryIndexes } from './ask-again.js';
 import { NARROW_MAX_WIDTH, balancedColumns, maxColumns } from './yard-columns.js';
 import { isRepoSlug, parseScanParams, searchAfterScan, type ScanOrigin } from './scan-address.js';
+import { resultHeadline } from './result-headline.js';
+import { COPY_FAILED_MESSAGE, copiedMessage, fixSteps, openOnGithubLabel, patchedDocument } from './fix-steps.js';
+import { githubFileUrl } from './github-file.js';
 
 const LINK_CAP = 200;
 const BATCH_SIZE = 3;
@@ -32,17 +35,31 @@ const MAX_IN_FLIGHT = 2;
 const REVEAL_GAP_MS = 900;
 const EMPTY_ERROR = 'Paste a document or enter an address first.';
 
+const EMPTY_HEADLINE = 'Bring your dead links back.';
+
 type Kind = 'markdown' | 'html';
+/** What a scan reads: the hero's address field, the bundled sample or the textarea. */
+type Mode = 'address' | 'sample' | 'text';
+type Field = 'address' | 'source';
 
 const $ = <T extends HTMLElement = HTMLElement>(id: string): T => document.getElementById(id) as T;
 const yard = $('yard');
+const ground = $('ground');
 const statusEl = $('status');
 const live = $('live');
 const source = $<HTMLTextAreaElement>('source');
 const address = $<HTMLInputElement>('address');
 const sourceError = $('source-error');
+const addressError = $('address-error');
+const heroForm = $('hero-form');
+const intro = $('intro');
+const tryRow = $('try');
 const scanBtn = $<HTMLButtonElement>('scan');
 const downloadBtn = $<HTMLButtonElement>('download');
+const copyPatchedBtn = $<HTMLButtonElement>('copy-patched');
+const patchedFallback = $<HTMLTextAreaElement>('patched-fallback');
+const ghLink = $<HTMLAnchorElement>('gh-link');
+const stepsEl = $('fix-steps');
 const soundBtn = $<HTMLButtonElement>('sound');
 const rowsEl = $('rows');
 const sampleScanBtn = $<HTMLButtonElement>('scan-sample');
@@ -59,7 +76,19 @@ let judgements: Array<Judgement | undefined> = [];
 let selected = -1;
 let currentSource = '';
 let currentKind: Kind = 'markdown';
+/** The repo (owner/repo) and README file of the running scan, when it came from a repo address. */
+let currentRepo: string | undefined;
+let currentFile: string | undefined;
 let scanning = false;
+/** The final headline is on screen: a judgement replaced afterwards (Ask again) updates it. */
+let finished = false;
+/** Links with no judgement because their batch failed, and how many links the document had. */
+let scanFailed = 0;
+let scanFound = 0;
+/** Which field the running scan came from: its error paragraph is the one shown. */
+let errorField: Field = 'source';
+/** Links in the running scan; 0 before any scan, which keeps the mist at 1. */
+let scanTotal = 0;
 /** Bumped by every new scan: answers that arrive for an older generation are discarded. */
 let scanGen = 0;
 /** Document positions with an Ask again request in flight. */
@@ -95,14 +124,36 @@ function syncChrome(): void {
   const has = present().length > 0;
   $('tally').hidden = !has;
   $('inscription').hidden = !has;
-  // The sample button only invites a first scan: gone while scanning and once results exist.
-  sampleScanBtn.hidden = scanning || has;
+  // Before results the hero invites a first scan: explanation, address form, Try row, sample.
+  // While scanning it shows progress only. With results it keeps the address form, below the
+  // tally, so another address can be scanned, and drops the onboarding (explanation, Try row).
+  intro.hidden = scanning || has;
+  tryRow.hidden = scanning || has;
+  heroForm.hidden = scanning;
+}
+
+/** Mist = links still waiting plus restless ones, over all links (web/mist.ts). */
+function renderMist(restless: number): void {
+  ground.style.setProperty('--mist', String(mistOpacity(scanTotal, present().length, restless)));
+}
+
+/** The result sentence from the judgements on screen; a replaced judgement changes it too. */
+function renderHeadline(): void {
+  const c = tallies();
+  const fixable = present().filter(v => (v.verdict === 'dead' || v.verdict === 'possessed') && v.snap).length;
+  const text = resultHeadline({
+    total: scanTotal, dead: c.dead, possessed: c.possessed, fixable, restless: c.restless, failed: scanFailed,
+  });
+  const cap = scanFound > LINK_CAP ? ` Only the first ${LINK_CAP} of ${scanFound} links were scanned.` : '';
+  statusEl.textContent = text + cap;
 }
 
 function renderTally(): void {
   syncChrome();
   const c = tallies();
   for (const k of Object.keys(c) as Verdict[]) $(`n-${k}`).textContent = String(c[k]);
+  renderMist(c.restless);
+  if (finished) renderHeadline();
 }
 
 // ---------------------------------------------------------------------------
@@ -294,6 +345,27 @@ function renderPatchNote(): void {
   const n = patchCount();
   $('patch-note').textContent = `${n} ${plural(n, 'link will point to its archived copy', 'links will point to their archived copies')} in the download.`;
   downloadBtn.disabled = scanning || !n;
+  copyPatchedBtn.disabled = downloadBtn.disabled;
+}
+
+/** The GitHub link and the steps beside the buttons: three steps only when the link is shown. */
+function renderFix(): void {
+  const [owner, repo] = (currentRepo ?? '').split('/');
+  const href = owner && repo && currentFile ? githubFileUrl(owner, repo, currentFile) : undefined;
+  if (href && currentFile) {
+    ghLink.href = href;
+    ghLink.textContent = openOnGithubLabel(currentFile);
+    ghLink.hidden = false;
+  } else {
+    ghLink.removeAttribute('href');
+    ghLink.textContent = '';
+    ghLink.hidden = true;
+  }
+  stepsEl.replaceChildren(...fixSteps(href !== undefined).map(text => {
+    const li = document.createElement('li');
+    li.textContent = text;
+    return li;
+  }));
 }
 
 rowsEl.addEventListener('change', e => {
@@ -313,19 +385,25 @@ rowsEl.addEventListener('change', e => {
 // Errors
 // ---------------------------------------------------------------------------
 
-function showError(message: string, invalid = false): void {
-  sourceError.textContent = message;
-  sourceError.hidden = false;
-  source.setAttribute('aria-invalid', String(invalid));
+function showError(message: string, invalid = false, field: Field = errorField): void {
+  const p = field === 'address' ? addressError : sourceError;
+  const input = field === 'address' ? address : source;
+  clearError();
+  p.textContent = message;
+  p.hidden = false;
+  input.setAttribute('aria-invalid', String(invalid));
+  input.setAttribute('aria-describedby', p.id);
   live.textContent = message;
 }
 
 function clearError(): void {
-  sourceError.hidden = true;
-  sourceError.textContent = EMPTY_ERROR;
-  source.setAttribute('aria-invalid', 'false');
+  for (const [p, input] of [[sourceError, source], [addressError, address]] as const) {
+    p.hidden = true;
+    p.textContent = EMPTY_ERROR;
+    input.setAttribute('aria-invalid', 'false');
+    input.removeAttribute('aria-describedby');
+  }
 }
-
 // ---------------------------------------------------------------------------
 // Input
 // ---------------------------------------------------------------------------
@@ -334,7 +412,7 @@ function looksLikeHtml(text: string): boolean {
   return /^\s*(<!doctype html|<[a-z][a-z0-9-]*(\s|>|\/>))/i.test(text);
 }
 
-async function resolveAddress(input: string): Promise<{ source: string; kind: Kind } | { error: string }> {
+async function resolveAddress(input: string): Promise<{ source: string; kind: Kind; file?: string } | { error: string }> {
   const kind = isRepoSlug(input) ? 'repo' : 'url';
   let res: Response;
   try {
@@ -346,7 +424,7 @@ async function resolveAddress(input: string): Promise<{ source: string; kind: Ki
   } catch {
     return { error: 'Could not reach the Revenant server. Check your connection and try again.' };
   }
-  let body: { source?: unknown; kind?: unknown; error?: unknown } = {};
+  let body: { source?: unknown; kind?: unknown; file?: unknown; error?: unknown } = {};
   try {
     body = (await res.json()) as typeof body;
   } catch { /* handled below */ }
@@ -356,7 +434,8 @@ async function resolveAddress(input: string): Promise<{ source: string; kind: Ki
     if (/^(Could not load that address|That address is not allowed)/.test(detail)) return { error: `${detail}.` };
     return { error: `Could not load that address: ${detail}.` };
   }
-  return { source: body.source, kind: body.kind === 'html' ? 'html' : 'markdown' };
+  const file = kind === 'repo' && typeof body.file === 'string' && body.file !== '' ? body.file : undefined;
+  return { source: body.source, kind: body.kind === 'html' ? 'html' : 'markdown', ...(file ? { file } : {}) };
 }
 
 // ---------------------------------------------------------------------------
@@ -402,25 +481,37 @@ function resetScene(): void {
   selected = -1;
   excluded.clear();
   asking.clear();
+  scanTotal = 0;
+  scanFailed = 0;
+  scanFound = 0;
+  finished = false;
   showInscription(undefined);
   $('ledger').hidden = true;
   rowsEl.replaceChildren();
   downloadBtn.disabled = true;
+  copyPatchedBtn.disabled = true;
+  patchedFallback.hidden = true;
+  currentRepo = undefined;
+  currentFile = undefined;
+  renderFix();
   setMoon(0);
   renderTally();
 }
 
-async function scan(fromSample = false): Promise<void> {
+async function scan(mode: Mode): Promise<void> {
   if (scanning) return;
   scanBtn.disabled = true;
   scanning = true;
   scanGen++;
+  errorField = mode === 'address' ? 'address' : 'source';
   clearError();
   resetScene();
   copyBtn.hidden = true;
   copyFallback.hidden = true;
+  // the hero input hides while scanning: park focus on the status heading so it is not lost
+  if (heroForm.contains(document.activeElement) || tryRow.contains(document.activeElement)) statusEl.focus();
   try {
-    await runScan(fromSample);
+    await runScan(mode);
   } finally {
     scanning = false;
     scanBtn.disabled = false;
@@ -434,9 +525,7 @@ function scanSample(): void {
   if (scanning) return;
   source.value = sample;
   address.value = '';
-  // the button is about to hide: park focus on the status heading so it is not lost
-  if (document.activeElement === sampleScanBtn) statusEl.focus();
-  void scan(true);
+  void scan('sample');
 }
 
 /**
@@ -450,23 +539,28 @@ function writeAddress(origin: ScanOrigin): void {
   copyFallback.hidden = true;
 }
 
-async function runScan(fromSample: boolean): Promise<void> {
-  const addr = fromSample ? '' : address.value.trim();
+async function runScan(mode: Mode): Promise<void> {
   let text: string;
   let kind: Kind;
-  if (addr) {
+  if (mode === 'address') {
+    const addr = address.value.trim();
     statusEl.textContent = 'Fetching the document.';
     const resolved = await resolveAddress(addr);
     if ('error' in resolved) {
-      statusEl.textContent = 'Paste a document. Its links rise here.';
+      statusEl.textContent = EMPTY_HEADLINE;
       showError(resolved.error);
       return;
     }
     text = resolved.source;
     kind = resolved.kind;
     writeAddress({ kind: 'address', address: addr });
+    if (isRepoSlug(addr) && resolved.file) {
+      currentRepo = addr;
+      currentFile = resolved.file;
+    }
+    renderFix();
   } else {
-    writeAddress(fromSample ? { kind: 'sample' } : { kind: 'text' });
+    writeAddress(mode === 'sample' ? { kind: 'sample' } : { kind: 'text' });
     text = source.value;
     kind = looksLikeHtml(text) ? 'html' : 'markdown';
   }
@@ -475,13 +569,16 @@ async function runScan(fromSample: boolean): Promise<void> {
 
   const found = extract(text, kind);
   if (found.length === 0) {
-    statusEl.textContent = 'Paste a document. Its links rise here.';
+    statusEl.textContent = EMPTY_HEADLINE;
     showError('No links found. Only http and https links are scanned.');
     return;
   }
   const gen = scanGen;
   const links: Link[] = found.slice(0, LINK_CAP);
   const total = links.length;
+  scanTotal = total;
+  scanFound = found.length;
+  renderMist(0);
   const capNote = found.length > LINK_CAP ? ` A scan covers up to ${LINK_CAP}.` : '';
   statusEl.textContent = found.length > LINK_CAP
     ? `Judging ${total} of ${found.length} links.${capNote}`
@@ -512,6 +609,7 @@ async function runScan(fromSample: boolean): Promise<void> {
       live.textContent = `${done} of ${total} ${plural(total, 'link', 'links')} judged: ${count()}.`;
     } else {
       failed += size;
+      scanFailed = failed;
       firstFailure ||= result.detail;
       setMoon(done / total);
       showError(`${failed} ${plural(failed, 'link', 'links')} could not be checked (${firstFailure}). The rest were judged.`);
@@ -529,10 +627,10 @@ async function runScan(fromSample: boolean): Promise<void> {
   await retryArchive(gen);
   if (gen !== scanGen) return;
 
-  const judged = total - failed;
-  statusEl.textContent = found.length > LINK_CAP
-    ? `${judged} of ${found.length} links judged.${capNote}`
-    : failed ? `${judged} of ${total} ${plural(total, 'link', 'links')} judged.` : `${total} ${plural(total, 'link', 'links')} judged.`;
+  scanFailed = failed;
+  finished = true;
+  renderHeadline();
+  live.textContent = statusEl.textContent;
   selectDefault();
   bell();
 }
@@ -632,8 +730,7 @@ async function retryArchive(gen: number): Promise<void> {
 // ---------------------------------------------------------------------------
 
 function download(): void {
-  const list = judgements.filter((j): j is Judgement => j !== undefined);
-  const patched = patch(currentSource, list, excluded);
+  const patched = patchedDocument(currentSource, judgements, excluded);
   const ext = currentKind === 'html' ? 'html' : 'md';
   const name = `revenant-patched.${ext}`;
   const blob = new Blob([patched], { type: currentKind === 'html' ? 'text/html' : 'text/markdown' });
@@ -649,6 +746,43 @@ function download(): void {
   const n = patchCount();
   live.textContent = `${name} downloaded with ${n} ${plural(n, 'link', 'links')} pointing to archived copies.`;
 }
+
+// Copy patched document: the same text as Download. If the Clipboard API is missing or rejects, the
+// text goes into a readonly textarea, selected, so Ctrl+C works. The textarea is removed again when it
+// loses focus or on Escape (focus returns to the button), so focus is never trapped there.
+let copyPatchedTimer = 0;
+function copiedPatched(message: string, label: string): void {
+  live.textContent = message;
+  copyPatchedBtn.textContent = label;
+  clearTimeout(copyPatchedTimer);
+  copyPatchedTimer = window.setTimeout(() => { copyPatchedBtn.textContent = 'Copy patched document'; }, 2000);
+}
+
+function hidePatchedFallback(): void {
+  patchedFallback.hidden = true;
+  patchedFallback.value = '';
+}
+patchedFallback.addEventListener('blur', hidePatchedFallback);
+patchedFallback.addEventListener('keydown', e => {
+  if (e.key !== 'Escape') return;
+  hidePatchedFallback();
+  copyPatchedBtn.focus();
+});
+
+copyPatchedBtn.addEventListener('click', () => {
+  if (copyPatchedBtn.disabled) return;
+  const text = patchedDocument(currentSource, judgements, excluded);
+  const message = copiedMessage(patchCount());
+  const fallback = (): void => {
+    patchedFallback.value = text;
+    patchedFallback.hidden = false;
+    patchedFallback.focus();
+    patchedFallback.select();
+    copiedPatched(COPY_FAILED_MESSAGE, 'Copy failed');
+  };
+  if (!navigator.clipboard) return fallback();
+  navigator.clipboard.writeText(text).then(() => copiedPatched(message, message), fallback);
+});
 
 // ---------------------------------------------------------------------------
 // Sound
@@ -672,16 +806,29 @@ function bell(): void {
 // Events
 // ---------------------------------------------------------------------------
 
+// The hero form scans the address (Enter in the field submits it).
+heroForm.addEventListener('submit', e => {
+  e.preventDefault();
+  if (scanning) return;
+  if (!address.value.trim()) {
+    showError(EMPTY_ERROR, true, 'address');
+    address.focus();
+    return;
+  }
+  void scan('address');
+});
+
+// The lower form scans the textarea and clears the address field.
 $('doc').addEventListener('submit', e => {
   e.preventDefault();
   if (scanBtn.disabled) return;
-  const empty = !source.value.trim() && !address.value.trim();
-  if (empty) {
-    showError(EMPTY_ERROR, true);
+  if (!source.value.trim()) {
+    showError(EMPTY_ERROR, true, 'source');
     source.focus();
     return;
   }
-  void scan();
+  address.value = '';
+  void scan('text');
 });
 
 sampleScanBtn.addEventListener('click', scanSample);
@@ -714,8 +861,8 @@ copyBtn.addEventListener('click', () => {
   if (param.kind === 'sample') scanSample();
   else if (param.kind === 'repo' || param.kind === 'url') {
     address.value = param.value;
-    void scan();
-  } else if (param.kind === 'invalid') showError(param.message);
+    void scan('address');
+  } else if (param.kind === 'invalid') showError(param.message, false, 'address');
 }
 
 $('sample').addEventListener('click', () => {

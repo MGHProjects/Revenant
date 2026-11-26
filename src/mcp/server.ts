@@ -10,7 +10,8 @@ import { CallToolRequestSchema, ListToolsRequestSchema } from '@modelcontextprot
 import type { Fetcher, Judgement, Wayback } from '../core/types.js';
 import { archiveNote } from '../core/archive-note.js';
 import { scan } from '../net/scan.js';
-import { fetcher as defaultFetcher } from '../net/fetcher.js';
+import { defaultArchiveQueue } from '../net/archive-queue.js';
+import { createFetcher } from '../net/fetcher.js';
 import { createWaybackClient } from '../net/wayback.js';
 
 export interface McpDeps {
@@ -47,7 +48,8 @@ export async function handleCheckLinks(
 
   if (source.trim() === '') return fail('no URLs found');
 
-  const judgements: Judgement[] = [];
+  // A later judgement for the same URL replaces the earlier one (scan's retry); Map keeps first-seen order.
+  const finalByUrl = new Map<string, Judgement>();
   let total = 0;
   let capped = false;
   for await (const event of scan(source, 'markdown', deps.fetcher, deps.wayback)) {
@@ -55,7 +57,7 @@ export async function handleCheckLinks(
       total = event.total;
       capped = event.capped;
     } else if (event.type === 'judgement') {
-      judgements.push(event.judgement);
+      finalByUrl.set(event.judgement.link.url, event.judgement);
     } else {
       return fail(event.message);
     }
@@ -63,6 +65,7 @@ export async function handleCheckLinks(
 
   if (total === 0) return fail('no URLs found');
 
+  const judgements = [...finalByUrl.values()];
   const withNotes = judgements.map(j => {
     const archiveNoteText = archiveNote(j);
     return archiveNoteText === undefined ? j : { ...j, archiveNote: archiveNoteText };
@@ -167,6 +170,11 @@ export function createMcpServer(deps: McpDeps): Server {
 
 /** Connects a server with the default network clients to stdin/stdout. */
 export async function startStdio(): Promise<void> {
-  const server = createMcpServer({ fetcher: defaultFetcher, wayback: createWaybackClient() });
+  // One archive queue (1 s gap) shared by the fetcher and the Wayback client.
+  const queue = defaultArchiveQueue();
+  const server = createMcpServer({
+    fetcher: createFetcher({ archiveQueue: queue }),
+    wayback: createWaybackClient({ queue }),
+  });
   await server.connect(new StdioServerTransport());
 }

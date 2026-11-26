@@ -46,7 +46,7 @@ describe('resolveRepoReadme', () => {
     const text = '# Title — a 🎃 README\n[x](https://example.org)\n';
     const { f, calls } = stub({ [API]: () => apiBody(text) });
     const r = await resolveRepoReadme('o/r', f);
-    expect(r).toEqual({ ok: true, source: text, kind: 'markdown' });
+    expect(r).toEqual({ ok: true, source: text, kind: 'markdown', file: 'README.md' });
     const headers = calls.find(c => c.url === API)!.init!.headers as Record<string, string>;
     expect(headers['Accept']).toBe('application/vnd.github+json');
     expect(headers['X-GitHub-Api-Version']).toBe('2022-11-28');
@@ -55,7 +55,7 @@ describe('resolveRepoReadme', () => {
 
   it('resolves readme.markdown through /readme as markdown, and .html as html', async () => {
     const md = stub({ [API]: () => apiBody('hi', 'readme.markdown') });
-    expect(await resolveRepoReadme('o/r', md.f)).toEqual({ ok: true, source: 'hi', kind: 'markdown' });
+    expect(await resolveRepoReadme('o/r', md.f)).toEqual({ ok: true, source: 'hi', kind: 'markdown', file: 'readme.markdown' });
     const html = stub({ [API]: () => apiBody('<p>hi</p>', 'index.htm') });
     expect(await resolveRepoReadme('o/r', html.f)).toMatchObject({ ok: true, kind: 'html' });
   });
@@ -67,7 +67,7 @@ describe('resolveRepoReadme', () => {
         new Response(JSON.stringify({ name: 'README.md', encoding: 'none', content: '', download_url: dl })),
       [dl]: () => new Response('big — readme'),
     });
-    expect(await resolveRepoReadme('o/r', f)).toEqual({ ok: true, source: 'big — readme', kind: 'markdown' });
+    expect(await resolveRepoReadme('o/r', f)).toEqual({ ok: true, source: 'big — readme', kind: 'markdown', file: 'README.md' });
   });
 
   it('does not follow a download_url on another host', async () => {
@@ -101,7 +101,7 @@ describe('resolveRepoReadme', () => {
 
   it('README.md hit costs one request and no API call', async () => {
     const { f, calls } = stub({ [rawUrl('README.md')]: () => new Response('# hi — 🎃') });
-    expect(await resolveRepoReadme('o/r', f)).toEqual({ ok: true, source: '# hi — 🎃', kind: 'markdown' });
+    expect(await resolveRepoReadme('o/r', f)).toEqual({ ok: true, source: '# hi — 🎃', kind: 'markdown', file: 'README.md' });
     expect(calls.map(c => c.url)).toEqual([rawUrl('README.md')]);
   });
 
@@ -110,8 +110,40 @@ describe('resolveRepoReadme', () => {
       [rawUrl('README.md')]: () => new Response('', { status: 404 }),
       [rawUrl('readme.md')]: () => new Response('lower'),
     });
-    expect(await resolveRepoReadme('o/r', f)).toEqual({ ok: true, source: 'lower', kind: 'markdown' });
+    expect(await resolveRepoReadme('o/r', f)).toEqual({ ok: true, source: 'lower', kind: 'markdown', file: 'readme.md' });
     expect(calls).toHaveLength(2);
+  });
+
+  it.each(RAW_NAMES)('a raw hit on %s returns that file name', async name => {
+    const { f } = stub({ ...all404(RAW_NAMES), [rawUrl(name)]: () => new Response('text') });
+    expect(await resolveRepoReadme('o/r', f)).toEqual({ ok: true, source: 'text', kind: 'markdown', file: name });
+  });
+
+  it('an API hit returns the API name, or the path when it has one', async () => {
+    const named = stub({ ...all404(), [API]: () => apiBody('x', 'README.rst.md') });
+    expect(await resolveRepoReadme('o/r', named.f)).toMatchObject({ ok: true, file: 'README.rst.md' });
+
+    const pathed = stub({
+      ...all404(),
+      [API]: () =>
+        new Response(
+          JSON.stringify({ name: 'README.md', path: 'docs/README.md', encoding: 'base64', content: b64('x') }),
+        ),
+    });
+    expect(await resolveRepoReadme('o/r', pathed.f)).toMatchObject({ ok: true, file: 'docs/README.md' });
+  });
+
+  it('an API hit through download_url keeps the file name', async () => {
+    const dl = 'https://raw.githubusercontent.com/o/r/main/docs/README.md';
+    const { f } = stub({
+      ...all404(),
+      [API]: () =>
+        new Response(
+          JSON.stringify({ name: 'README.md', path: 'docs/README.md', encoding: 'none', content: '', download_url: dl }),
+        ),
+      [dl]: () => new Response('big'),
+    });
+    expect(await resolveRepoReadme('o/r', f)).toMatchObject({ ok: true, source: 'big', file: 'docs/README.md' });
   });
 
   it('extensionless README is markdown', async () => {
@@ -198,7 +230,7 @@ describe('POST /api/resolve (repo)', () => {
 
   it('maps each outcome to its status code', async () => {
     vi.stubGlobal('fetch', stub({ [API]: () => apiBody('é — 🎃') }).f);
-    expect(await resolve('o/r')).toEqual({ status: 200, body: { source: 'é — 🎃', kind: 'markdown' } });
+    expect(await resolve('o/r')).toEqual({ status: 200, body: { source: 'é — 🎃', kind: 'markdown', file: 'README.md' } });
 
     vi.stubGlobal('fetch', stub({ [API]: () => new Response('{}', { status: 404 }) }).f);
     expect(await resolve('o/r')).toEqual({
@@ -213,6 +245,34 @@ describe('POST /api/resolve (repo)', () => {
     expect(await resolve('o/r')).toMatchObject({ status: 502 });
 
     expect(await resolve('bad slug')).toMatchObject({ status: 400 });
+  });
+
+  it('includes the README path from the API fallback, and nothing else new', async () => {
+    vi.stubGlobal(
+      'fetch',
+      stub({
+        ...all404(),
+        [API]: () =>
+          new Response(
+            JSON.stringify({ name: 'README.md', path: 'docs/README.md', sha: 'abc', encoding: 'base64', content: b64('x') }),
+          ),
+      }).f,
+    );
+    expect(await resolve('o/r')).toEqual({
+      status: 200,
+      body: { source: 'x', kind: 'markdown', file: 'docs/README.md' },
+    });
+  });
+
+  it('a url resolve has no file', async () => {
+    vi.stubGlobal('fetch', async () => new Response('# hi', { status: 200, headers: { 'Content-Type': 'text/plain' } }));
+    const res = await app.request('/api/resolve', {
+      method: 'POST',
+      body: JSON.stringify({ input: 'https://example.com/a.md', kind: 'url' }),
+    });
+    const body = (await res.json()) as Record<string, unknown>;
+    expect(body).toEqual({ source: '# hi', kind: 'markdown' });
+    expect('file' in body).toBe(false);
   });
 });
 

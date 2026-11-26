@@ -1762,6 +1762,11 @@
         "executionId": "2b92e875-5b3c-4549-a002-bc22fdecbc71",
         "chatSessionId": "sess_e72fc9f8-796b-436a-a688-fd774785d218",
         "timestamp": 1795622902117
+      },
+      {
+        "executionId": "5b1a6a00-8211-42a8-9889-b9cfe917cbe8",
+        "chatSessionId": "sess_e72fc9f8-796b-436a-a688-fd774785d218",
+        "timestamp": 1795626727165
       }
     ],
     "16.8 Kiro guards its own documents, and the build has a log. A hook in `.kiro/hooks` runs Revenant's CLI on `README.md` (report every dead or possessed link) and on files in `samples/` (report only links whose verdict differs from the expected-verdicts comment) when they are saved, and feeds the result back to the agent. `docs/build-log.md` describes how the project was built with Kiro, section by section, with a file or commit for every fact; hook runs are described by configuration, not invented catches; Claude's contributions are stated plainly.": [
@@ -1779,6 +1784,265 @@
         "executionId": "2b92e875-5b3c-4549-a002-bc22fdecbc71",
         "chatSessionId": "sess_e72fc9f8-796b-436a-a688-fd774785d218",
         "timestamp": 1795626108881
+      }
+    ],
+    "16. Production review fixes": [
+      {
+        "executionId": "5b1a6a00-8211-42a8-9889-b9cfe917cbe8",
+        "chatSessionId": "sess_e72fc9f8-796b-436a-a688-fd774785d218",
+        "timestamp": 1795626727261
+      }
+    ],
+    "17.1 Sky and moonlight. Port from `docs/design/canvas/project/Main.dc.html` (CSS values and SVG paths exactly; no mock data, scan simulation, templating or Google Fonts). The header becomes `.sky` (gradient from ink to `#1e2a47` at the horizon, overflow hidden); the moon sits in `.moonbox` with a `.glow` behind it whose opacity is the scan progress, the same value that moves the moon's shade.": [
+      {
+        "executionId": "5b1a6a00-8211-42a8-9889-b9cfe917cbe8",
+        "chatSessionId": "sess_e72fc9f8-796b-436a-a688-fd774785d218",
+        "timestamp": 1795626748895
+      },
+      {
+        "executionId": "5b1a6a00-8211-42a8-9889-b9cfe917cbe8",
+        "chatSessionId": "sess_e72fc9f8-796b-436a-a688-fd774785d218",
+        "timestamp": 1795626755893
+      },
+      {
+        "executionId": "5b1a6a00-8211-42a8-9889-b9cfe917cbe8",
+        "chatSessionId": "sess_e72fc9f8-796b-436a-a688-fd774785d218",
+        "timestamp": 1795627079352
+      }
+    ],
+    "17.2 Horizon. A static, `aria-hidden` `.horizon` band between the hero and the yard: far hill (SVG, stretched), bare tree (SVG), iron fence (CSS gradients, two segments that stop at the gate), gate (SVG), positioned with `--edge` and `--gate`, using only ink and `#141b2d`. Nothing in it moves.": [
+      {
+        "executionId": "5b1a6a00-8211-42a8-9889-b9cfe917cbe8",
+        "chatSessionId": "sess_e72fc9f8-796b-436a-a688-fd774785d218",
+        "timestamp": 1795626748961
+      },
+      {
+        "executionId": "5b1a6a00-8211-42a8-9889-b9cfe917cbe8",
+        "chatSessionId": "sess_e72fc9f8-796b-436a-a688-fd774785d218",
+        "timestamp": 1795627080220
+      },
+      {
+        "executionId": "5b1a6a00-8211-42a8-9889-b9cfe917cbe8",
+        "chatSessionId": "sess_e72fc9f8-796b-436a-a688-fd774785d218",
+        "timestamp": 1795629326098
+      }
+    ],
+    "17.3 Ground and mist. The yard moves into `.ground` with a `.mist` layer behind the plots. Mist opacity = (links still waiting + restless links) / total links, 1 before any scan, from a pure tested function ((9,0,0) gives 1; (9,3,0) gives 0.67; (9,9,2) gives 0.22; (0,0,0) gives 1). The two mist layers drift with transform only (90 s and 140 s) and do not drift under reduced motion.": [
+      {
+        "executionId": "5b1a6a00-8211-42a8-9889-b9cfe917cbe8",
+        "chatSessionId": "sess_e72fc9f8-796b-436a-a688-fd774785d218",
+        "timestamp": 1795626749009
+      },
+      {
+        "executionId": "5b1a6a00-8211-42a8-9889-b9cfe917cbe8",
+        "chatSessionId": "sess_e72fc9f8-796b-436a-a688-fd774785d218",
+        "timestamp": 1795629327176
+      },
+      {
+        "executionId": "5b1a6a00-8211-42a8-9889-b9cfe917cbe8",
+        "chatSessionId": "sess_e72fc9f8-796b-436a-a688-fd774785d218",
+        "timestamp": 1795629556073
+      }
+    ],
+    "17.4 First row in front of the fence. `.yard` has `margin-top: -40px` and `min-height: 150px`; `.ground` has `display: flow-root` so the margin does not collapse. Rows after the first are unchanged.": [
+      {
+        "executionId": "5b1a6a00-8211-42a8-9889-b9cfe917cbe8",
+        "chatSessionId": "sess_e72fc9f8-796b-436a-a688-fd774785d218",
+        "timestamp": 1795626749058
+      },
+      {
+        "executionId": "5b1a6a00-8211-42a8-9889-b9cfe917cbe8",
+        "chatSessionId": "sess_e72fc9f8-796b-436a-a688-fd774785d218",
+        "timestamp": 1795629556791
+      },
+      {
+        "executionId": "5b1a6a00-8211-42a8-9889-b9cfe917cbe8",
+        "chatSessionId": "sess_e72fc9f8-796b-436a-a688-fd774785d218",
+        "timestamp": 1795632365363
+      }
+    ],
+    "17.5 Stones catch the moon: the reference's gradient and inset highlight on `.stone`. No other figure changes.": [
+      {
+        "executionId": "5b1a6a00-8211-42a8-9889-b9cfe917cbe8",
+        "chatSessionId": "sess_e72fc9f8-796b-436a-a688-fd774785d218",
+        "timestamp": 1795626749106
+      },
+      {
+        "executionId": "5b1a6a00-8211-42a8-9889-b9cfe917cbe8",
+        "chatSessionId": "sess_e72fc9f8-796b-436a-a688-fd774785d218",
+        "timestamp": 1795632365501
+      },
+      {
+        "executionId": "5b1a6a00-8211-42a8-9889-b9cfe917cbe8",
+        "chatSessionId": "sess_e72fc9f8-796b-436a-a688-fd774785d218",
+        "timestamp": 1795632542036
+      }
+    ],
+    "17.6 Narrow screens (max-width 760px): the reference's media-query rules. Gate and right fence segment hidden, smaller tree, horizon 104px tall.": [
+      {
+        "executionId": "5b1a6a00-8211-42a8-9889-b9cfe917cbe8",
+        "chatSessionId": "sess_e72fc9f8-796b-436a-a688-fd774785d218",
+        "timestamp": 1795626749165
+      },
+      {
+        "executionId": "5b1a6a00-8211-42a8-9889-b9cfe917cbe8",
+        "chatSessionId": "sess_e72fc9f8-796b-436a-a688-fd774785d218",
+        "timestamp": 1795632542820
+      },
+      {
+        "executionId": "5b1a6a00-8211-42a8-9889-b9cfe917cbe8",
+        "chatSessionId": "sess_e72fc9f8-796b-436a-a688-fd774785d218",
+        "timestamp": 1795632755604
+      }
+    ],
+    "17.7 Checks. The sticky inscription stays above the mist. First-row host and verdict labels keep 4.5:1 contrast against the mist at full opacity at 1440, 1024 and 375 px. No horizontal scroll at any width.": [
+      {
+        "executionId": "5b1a6a00-8211-42a8-9889-b9cfe917cbe8",
+        "chatSessionId": "sess_e72fc9f8-796b-436a-a688-fd774785d218",
+        "timestamp": 1795626749229
+      },
+      {
+        "executionId": "5b1a6a00-8211-42a8-9889-b9cfe917cbe8",
+        "chatSessionId": "sess_e72fc9f8-796b-436a-a688-fd774785d218",
+        "timestamp": 1795632756749
+      },
+      {
+        "executionId": "5b1a6a00-8211-42a8-9889-b9cfe917cbe8",
+        "chatSessionId": "sess_e72fc9f8-796b-436a-a688-fd774785d218",
+        "timestamp": 1795641727712
+      }
+    ],
+    "17.8 Steering. `costume.md`: mist is what has not been judged, moonlight follows progress, and a \"Scenery\" rule (static, ink only, `aria-hidden`, never animated, never a verdict shape or colour). `product.md`: \"Every spooky element on the ground encodes state; the static horizon is the only scenery.\" The Costume check hook prompt in `.kiro/hooks/quality.json` applies the Scenery rule so it does not flag the horizon.": [
+      {
+        "executionId": "5b1a6a00-8211-42a8-9889-b9cfe917cbe8",
+        "chatSessionId": "sess_e72fc9f8-796b-436a-a688-fd774785d218",
+        "timestamp": 1795626749276
+      },
+      {
+        "executionId": "5b1a6a00-8211-42a8-9889-b9cfe917cbe8",
+        "chatSessionId": "sess_e72fc9f8-796b-436a-a688-fd774785d218",
+        "timestamp": 1795632763741
+      },
+      {
+        "executionId": "5b1a6a00-8211-42a8-9889-b9cfe917cbe8",
+        "chatSessionId": "sess_e72fc9f8-796b-436a-a688-fd774785d218",
+        "timestamp": 1795641729249
+      }
+    ],
+    "17.9 Retake the three README screenshots and `og.png` from production after section 17 is deployed; fill the caption date. Say so if `og.png` cannot be rendered.": [
+      {
+        "executionId": "5b1a6a00-8211-42a8-9889-b9cfe917cbe8",
+        "chatSessionId": "sess_e72fc9f8-796b-436a-a688-fd774785d218",
+        "timestamp": 1795626749326
+      }
+    ],
+    "18.1 Markdown link destinations with parentheses. The extractor ends a URL at the first `)`, so `https://en.wikipedia.org/wiki/Load_balancing_(computing)` is cut and judged dead. Fix `extract` so the URL and its span cover the whole destination (balanced parentheses, CommonMark), also for bare URLs ending in a balanced `)`. Property test: any URL with balanced parentheses inside `[text](url)` is extracted exactly and `patch` replaces exactly that span.": [
+      {
+        "executionId": "99e3b0e8-21e1-4673-9202-59bc0bd23e03",
+        "chatSessionId": "sess_e72fc9f8-796b-436a-a688-fd774785d218",
+        "timestamp": 1795686325060
+      },
+      {
+        "executionId": "99e3b0e8-21e1-4673-9202-59bc0bd23e03",
+        "chatSessionId": "sess_e72fc9f8-796b-436a-a688-fd774785d218",
+        "timestamp": 1795686331672
+      },
+      {
+        "executionId": "99e3b0e8-21e1-4673-9202-59bc0bd23e03",
+        "chatSessionId": "sess_e72fc9f8-796b-436a-a688-fd774785d218",
+        "timestamp": 1795686477996
+      }
+    ],
+    "18.2 A rename is not a possession. Same registrable name under another public suffix (exercism.io to exercism.org) is alive, \"Moved to {domain}.\"; a short documented list of known renames in `src/core` (twitter.com to x.com) is alive, \"Moved to x.com.\"; when the live page has too little visible text to compare (threshold chosen from measured real pages) the verdict is restless, \"Redirects to {domain}; the new page has too little text to compare. Not judged.\"; geocities.com to yahoo.com and codeplex.com to microsoft.com stay possessed. Update requirements.md, design.md and the properties; README limits note the blind spot.": [
+      {
+        "executionId": "99e3b0e8-21e1-4673-9202-59bc0bd23e03",
+        "chatSessionId": "sess_e72fc9f8-796b-436a-a688-fd774785d218",
+        "timestamp": 1795686325182
+      },
+      {
+        "executionId": "99e3b0e8-21e1-4673-9202-59bc0bd23e03",
+        "chatSessionId": "sess_e72fc9f8-796b-436a-a688-fd774785d218",
+        "timestamp": 1795686479405
+      },
+      {
+        "executionId": "99e3b0e8-21e1-4673-9202-59bc0bd23e03",
+        "chatSessionId": "sess_e72fc9f8-796b-436a-a688-fd774785d218",
+        "timestamp": 1795686940254
+      }
+    ],
+    "18.3 The Internet Archive throttles bulk scans. Every request to web.archive.org (CDX, snapshot bodies, links whose host is web.archive.org) goes through one queue: one at a time, a minimum gap (1 s in CLI and MCP, 300 ms in the Worker, one constant), `Retry-After` honoured. At the end of `scan()`, ask once more for the judgements whose archive answer was unavailable. Re-run the CLI on donnemartin/system-design-primer: dead links should have copies.": [
+      {
+        "executionId": "99e3b0e8-21e1-4673-9202-59bc0bd23e03",
+        "chatSessionId": "sess_e72fc9f8-796b-436a-a688-fd774785d218",
+        "timestamp": 1795686325234
+      },
+      {
+        "executionId": "99e3b0e8-21e1-4673-9202-59bc0bd23e03",
+        "chatSessionId": "sess_e72fc9f8-796b-436a-a688-fd774785d218",
+        "timestamp": 1795686940973
+      },
+      {
+        "executionId": "99e3b0e8-21e1-4673-9202-59bc0bd23e03",
+        "chatSessionId": "sess_e72fc9f8-796b-436a-a688-fd774785d218",
+        "timestamp": 1795687739271
+      }
+    ],
+    "18.4 The page says who it is for. Empty-state headline \"Bring your dead links back.\" with the new explanation; the address field moves into the hero as the main input (label \"GitHub repo or page address\", placeholder \"owner/repo or https://...\", primary \"Scan its links\"), a \"Try:\" row with three repo links, \"Scan the sample\" as a secondary button; the textarea stays below, labelled \"Or paste a document\", with \"Scan the document\" secondary. When a scan ends the headline states the result (\"{gone} of {total} links are gone. {fixable} can come back.\" / \"All {total} links still lead where they should.\" / \"{n} could not be judged.\"), with singular forms.": [
+      {
+        "executionId": "99e3b0e8-21e1-4673-9202-59bc0bd23e03",
+        "chatSessionId": "sess_e72fc9f8-796b-436a-a688-fd774785d218",
+        "timestamp": 1795686325283
+      },
+      {
+        "executionId": "99e3b0e8-21e1-4673-9202-59bc0bd23e03",
+        "chatSessionId": "sess_e72fc9f8-796b-436a-a688-fd774785d218",
+        "timestamp": 1795687740686
+      },
+      {
+        "executionId": "99e3b0e8-21e1-4673-9202-59bc0bd23e03",
+        "chatSessionId": "sess_e72fc9f8-796b-436a-a688-fd774785d218",
+        "timestamp": 1795688225658
+      }
+    ],
+    "18.5 From verdict to fix. A \"Copy patched document\" button next to \"Download patched document\", announced in the live region. When the scan came from a repo, `/api/resolve` also returns the README's file name; show \"Open {file} on GitHub\" (edit URL if it can be shown to work, otherwise `/blob/HEAD/{file}`), and three short steps next to the buttons.": [
+      {
+        "executionId": "99e3b0e8-21e1-4673-9202-59bc0bd23e03",
+        "chatSessionId": "sess_e72fc9f8-796b-436a-a688-fd774785d218",
+        "timestamp": 1795686325334
+      },
+      {
+        "executionId": "99e3b0e8-21e1-4673-9202-59bc0bd23e03",
+        "chatSessionId": "sess_e72fc9f8-796b-436a-a688-fd774785d218",
+        "timestamp": 1795688225817
+      },
+      {
+        "executionId": "99e3b0e8-21e1-4673-9202-59bc0bd23e03",
+        "chatSessionId": "sess_e72fc9f8-796b-436a-a688-fd774785d218",
+        "timestamp": 1795690304722
+      }
+    ],
+    "18.6 Field test in the README. After 18.1 to 18.3, run the CLI again on the four READMEs (first 200 links each) and add a \"Field test\" section to README.md: date, method, totals per verdict, and the story of this round (28 flagged, 11 false alarms of three kinds, each became a rule and a test). Only numbers from our own runs.": [
+      {
+        "executionId": "99e3b0e8-21e1-4673-9202-59bc0bd23e03",
+        "chatSessionId": "sess_e72fc9f8-796b-436a-a688-fd774785d218",
+        "timestamp": 1795686325383
+      },
+      {
+        "executionId": "99e3b0e8-21e1-4673-9202-59bc0bd23e03",
+        "chatSessionId": "sess_e72fc9f8-796b-436a-a688-fd774785d218",
+        "timestamp": 1795690304829
+      },
+      {
+        "executionId": "99e3b0e8-21e1-4673-9202-59bc0bd23e03",
+        "chatSessionId": "sess_e72fc9f8-796b-436a-a688-fd774785d218",
+        "timestamp": 1795691659984
+      }
+    ],
+    "18. Field test fixes": [
+      {
+        "executionId": "99e3b0e8-21e1-4673-9202-59bc0bd23e03",
+        "chatSessionId": "sess_e72fc9f8-796b-436a-a688-fd774785d218",
+        "timestamp": 1795691660063
       }
     ]
   }

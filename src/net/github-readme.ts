@@ -26,7 +26,7 @@ const RAW_NAMES = ['README.md', 'readme.md', 'README', 'Readme.md', 'README.mark
 export type ReadmeErrorCode = 'not-found' | 'rate-limited' | 'invalid' | 'unavailable';
 
 export type ReadmeResult =
-  | { ok: true; source: string; kind: 'markdown' | 'html' }
+  | { ok: true; source: string; kind: 'markdown' | 'html'; file: string }
   | { ok: false; code: ReadmeErrorCode; message: string };
 
 type FetchImpl = (input: string, init?: RequestInit) => Promise<Response>;
@@ -115,7 +115,7 @@ export async function resolveRepoReadme(
         'User-Agent': USER_AGENT,
       });
       if (reply.status === 200) {
-        return { ok: true, source: decodeUtf8(reply.bytes), kind: 'markdown' };
+        return { ok: true, source: decodeUtf8(reply.bytes), kind: 'markdown', file: name };
       }
     } catch {
       // next name
@@ -145,10 +145,12 @@ export async function resolveRepoReadme(
     if (typeof data !== 'object' || data === null) return fail('unavailable');
     const rec = data as Record<string, unknown>;
     const kind = kindOf(rec['name']);
+    // `path` is the file's place in the repo (docs/README.md); `name` is the bare file name.
+    const file = typeof rec['path'] === 'string' && rec['path'] !== '' ? rec['path'] : typeof rec['name'] === 'string' ? rec['name'] : '';
 
     if (rec['encoding'] === 'base64' && typeof rec['content'] === 'string' && rec['content'].trim() !== '') {
       try {
-        return { ok: true, source: decodeUtf8(base64ToBytes(rec['content'])), kind };
+        return { ok: true, source: decodeUtf8(base64ToBytes(rec['content'])), kind, file };
       } catch {
         return fail('unavailable');
       }
@@ -156,7 +158,7 @@ export async function resolveRepoReadme(
 
     if (isRawGithubUrl(rec['download_url'])) {
       const raw = await get(f, rec['download_url'], { 'User-Agent': USER_AGENT });
-      if (raw.status === 200) return { ok: true, source: decodeUtf8(raw.bytes), kind };
+      if (raw.status === 200) return { ok: true, source: decodeUtf8(raw.bytes), kind, file };
       if (raw.status === 404) return fail('not-found');
     }
     return fail('unavailable');

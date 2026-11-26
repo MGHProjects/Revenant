@@ -12,12 +12,16 @@
  *   6f. For any Probe with outcome === 'network-error' and no dnsFailure, classify never returns `dead`.
  *   6g. For a cross-domain 2xx whose archive lookup was 'unavailable', classify never returns
  *       `alive` or `dead` (it is `restless`).
+ *   6h. The same name under another public suffix is never possessed.
+ *   6i. A known rename is never possessed.
+ *   6j. A live text under the threshold is never possessed.
  *   6e. Every result has exactly one verdict and a non-empty reason.
  */
 
 import { describe, it } from 'vitest';
 import * as fc from 'fast-check';
-import { classify } from '../src/core/classify.ts';
+import { classify, MIN_LIVE_TEXT_CHARS } from '../src/core/classify.ts';
+import { KNOWN_RENAMES } from '../src/core/known-renames.ts';
 import { registrableDomain } from '../src/core/domain.ts';
 import type { Probe, SnapshotResult } from '../src/core/types.ts';
 
@@ -221,4 +225,62 @@ describe('Property 6: Never cry wolf', () => {
       { numRuns: 100 },
     );
   });
-});
+
+  // Task 18.2: a rename is not a possession.
+  const arbName = fc.stringMatching(/^[a-z]{3,10}$/);
+  const arbLong = fc.string({ minLength: 0, maxLength: 400 });
+
+  it('6h: the same name under another suffix is never possessed', () => {
+    const arbSuffix = fc.constantFrom('com', 'org', 'net', 'io', 'co.uk', 'com.au', 'co.jp');
+    fc.assert(
+      fc.property(
+        arbName,
+        arbSuffix,
+        arbSuffix,
+        arbLong,
+        arbSnapshotText,
+        (name, s1, s2, text, snapshot) => {
+          fc.pre(s1 !== s2);
+          const probe: Probe = { outcome: 'response', status: 200, finalUrl: `https://www.${name}.${s2}/`, text };
+          const { verdict } = classify(probe, `http://${name}.${s1}/`, snapshot);
+          return verdict !== 'possessed';
+        },
+      ),
+      { numRuns: 100 },
+    );
+  });
+
+  it('6i: a known rename is never possessed', () => {
+    fc.assert(
+      fc.property(
+        fc.constantFrom(...KNOWN_RENAMES.entries()),
+        fc.constantFrom('', 'www.', 'mobile.'),
+        arbLong,
+        arbSnapshotText,
+        ([from, to], sub, text, snapshot) => {
+          const probe: Probe = { outcome: 'response', status: 200, finalUrl: `https://${to}/x`, text };
+          const { verdict } = classify(probe, `https://${sub}${from}/x`, snapshot);
+          return verdict !== 'possessed';
+        },
+      ),
+      { numRuns: 100 },
+    );
+  });
+
+  it('6j: a live text under the threshold is never possessed', () => {
+    fc.assert(
+      fc.property(
+        fc.string({ minLength: 0, maxLength: MIN_LIVE_TEXT_CHARS - 1 }),
+        arbName,
+        arbName,
+        fc.string({ minLength: 1, maxLength: 500 }),
+        (text, a, b, snap) => {
+          fc.pre(a !== b);
+          const probe: Probe = { outcome: 'response', status: 200, finalUrl: `https://${b}two.org/`, text };
+          const { verdict } = classify(probe, `https://${a}one.com/`, { status: 'text', text: snap });
+          return verdict !== 'possessed';
+        },
+      ),
+      { numRuns: 100 },
+    );
+  });});

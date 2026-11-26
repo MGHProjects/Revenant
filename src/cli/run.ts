@@ -11,7 +11,8 @@ import { patch } from '../core/patch.js';
 import type { CliOutput, Fetcher, Judgement, Wayback } from '../core/types.js';
 import { scan } from '../net/scan.js';
 import type { InputKind } from '../net/scan.js';
-import { fetcher as defaultFetcher } from '../net/fetcher.js';
+import { defaultArchiveQueue } from '../net/archive-queue.js';
+import { createFetcher } from '../net/fetcher.js';
 import { createWaybackClient } from '../net/wayback.js';
 
 // ---------------------------------------------------------------------------
@@ -127,23 +128,42 @@ export async function runCli(
     return { exitCode: 2, stdout: stdoutBuf, stderr: stderrBuf };
   }
 
-  const fetcher = injectedFetcher ?? defaultFetcher;
-  const wayback = injectedWayback ?? createWaybackClient();
-  const judgements: Judgement[] = [];
+  // Real clients share one archive queue (1 s between requests to the Internet Archive).
+  const queue = defaultArchiveQueue();
+  const fetcher = injectedFetcher ?? createFetcher({ archiveQueue: queue });
+  const wayback = injectedWayback ?? createWaybackClient({ queue });
+  // A later judgement for the same URL replaces the earlier one (see ScanEvent). The Map keeps the
+  // order in which each URL first appeared; --json, --fix, the summary and the exit code read it.
+  const finalByUrl = new Map<string, Judgement>();
+  // The line printed so far for each URL (undefined: nothing printed, e.g. alive).
+  const printed = new Map<string, string | undefined>();
   const stream = !jsonFlag && !fixFlag;
 
   for await (const event of scan(source, kind, fetcher, wayback, process.env['GITHUB_TOKEN'])) {
     if (event.type === 'judgement') {
       const j = event.judgement;
-      judgements.push(j);
-      if (stream && j.verdict !== 'alive') {
-        const resurrection = j.resurrection ?? archiveNote(j) ?? '—';
-        writeTo('stdout', `[${j.verdict}] ${j.link.url} — ${j.reason} (${resurrection})\n`);
+      const url = j.link.url;
+      const superseding = finalByUrl.has(url);
+      finalByUrl.set(url, j);
+      if (stream) {
+        const line = `[${j.verdict}] ${url} — ${j.reason} (${j.resurrection ?? archiveNote(j) ?? '—'})`;
+        if (!superseding) {
+          // First answer: every non-alive link prints one line, as before.
+          if (j.verdict !== 'alive') writeTo('stdout', line + '\n');
+          printed.set(url, j.verdict !== 'alive' ? line : undefined);
+        } else if (line !== printed.get(url) && !(j.verdict === 'alive' && printed.get(url) === undefined)) {
+          // Asked again and the answer differs: print the new line, marked. An unchanged answer
+          // prints nothing. A link that turns alive prints a line too, so the earlier one is not left standing.
+          writeTo('stdout', `${line} [asked again]\n`);
+          printed.set(url, line);
+        }
       }
     } else if (event.type === 'error') {
       writeTo('stderr', `revenant: ${event.message}\n`);
     }
   }
+
+  const judgements = [...finalByUrl.values()];
 
   // --fix: overwrite the original file with patched content.
   if (fixFlag && filePath !== null) {

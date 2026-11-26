@@ -15,9 +15,18 @@ its links rise out of it one by one as the scan streams in.
 - Tombstone **height** = how long the link lived (the longest continuous life in the archive).
   The **epitaph** carved on it is real data (the copy is stepped back from the end of the life, because pages decay before they die): `2009 – 2017 · copy from 14 Mar 2016`.
 - The **moon** is the progress indicator: it waxes from new to full as the scan completes.
+- **Mist** is what has not been judged. Its opacity is (links still waiting + restless links) / total, 1 before a scan.
+- **Moonlight** follows progress. The glow behind the moon brightens with the same value that waxes the moon.
 - **Resurrect** raises a pale ghost from the grave that becomes the link to the snapshot.
 - A plain **ledger** (accessible table) sits below the scene with the same data. The scene is
   never the only way to read a result.
+
+## Scenery
+
+The horizon (hill, tree, fence, gate) is static, uses ink only (`#0b0d12` and `#141b2d`), is
+`aria-hidden`, is never animated, and never uses a verdict shape (window, tombstone, hand, fog bars)
+or a verdict colour (amber, ectoplasm, bone used for labels, the restless fog colour). It is the only
+element that carries no state.
 
 ## Look
 
@@ -31,6 +40,7 @@ its links rise out of it one by one as the scan streams in.
 
 - Status is never colour-only: each verdict has its shape and a text label.
 - `prefers-reduced-motion`: no rising, no fog drift; results simply appear.
+- The mist drifts with `transform` only and stops under `prefers-reduced-motion`.
 - Full keyboard path: paste → scan → move through graves with arrows → Enter opens the snapshot.
 - New results are announced through one polite `aria-live` region, batched, not one per link.
 - Sound is off by default and has a visible toggle.

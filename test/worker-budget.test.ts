@@ -88,7 +88,7 @@ function stubWorld(scenarios: Record<string, Scenario>) {
         case '404':
           return new Response('gone', { status: 404 });
         case 'cross-2xx':
-          return new Response('<p>buy cheap pills casino poker bonus click here now</p>');
+          return new Response('<p>buy cheap pills casino poker bonus click here now, win big prizes, free spins and crypto offers, sign up today for exclusive vouchers and discount codes sent directly to your inbox every week, shop thousands of bargains updated hourly from favourite brands with free delivery on orders over fifty dollars</p>');
       }
     }
     // hops 0..3 redirect to the next path; hop 4 redirects to the other domain: 5 redirects.
@@ -160,7 +160,9 @@ describe('Worker subrequest budget', () => {
         body: JSON.stringify({ urls: hosts.map(h => `http://${h}/`) }),
       }),
     );
-    await vi.advanceTimersByTimeAsync(3_000);
+    // 2 s retry delay, then 12 archive requests (CDX 2 + id_ 2 per URL) one at a time, 300 ms apart.
+    // The queue changes timing, not the number of calls.
+    await vi.advanceTimersByTimeAsync(10_000);
     const res = await p;
     expect(res.status).toBe(200);
     expect(counts.fetch + counts.cache).toBe(3 * PER_URL_WORST_CASE);

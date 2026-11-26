@@ -83,8 +83,8 @@ describe('judgeLink — archive answer is all-or-nothing', () => {
     const crossDomain: Fetcher = async (): Promise<Probe> => ({
       outcome: 'response',
       status: 200,
-      finalUrl: 'https://parked-spam.example.net/',
-      text: '<p>fresh modern spam advertisement buy now limited offer discount sale promotion</p>',
+      finalUrl: 'https://parked-spam.spamhost.net/',
+      text: '<p>fresh modern spam advertisement buy now limited offer discount sale promotion, shop thousands of bargains updated hourly from favourite brands, free delivery on orders over fifty dollars, sign up for exclusive vouchers sent weekly to your inbox</p>',
     });
     const j = await judgeLink(linkOf('http://haunted-d.example.com/'), {
       fetcher: crossDomain,

@@ -2,7 +2,7 @@
  * judgeLink(link, deps, options) — the one per-link judgement used by the Worker, the CLI and MCP.
  *
  * Steps: guard → fetch (8 s, 512 KB) → one retry after 2 s on 5xx (skipDns) →
- * cross-domain snapshot lookup → visibleText of the live body (both sides capped if
+ * cross-domain snapshot lookup (skipped for a rename, see redirectKind) → visibleText of the live body (both sides capped if
  * options.textCap is set) → classify → epitaph and resurrection for dead/possessed.
  *
  * This is the single place the Worker subrequest budget refers to. Free plan: 50
@@ -23,7 +23,7 @@
 
 import { guard } from '../core/guard.js';
 import { classify } from '../core/classify.js';
-import { registrableDomain } from '../core/domain.js';
+import { redirectKind } from '../core/redirect-kind.js';
 import { visibleText } from '../core/visible-text.js';
 import { MAX_HOPS } from './fetcher.js';
 import { shouldRetry } from './retry.js';
@@ -105,9 +105,8 @@ export async function judgeLink(
   // Snapshot lookup only for a cross-domain 2xx. The Wayback client returns visible text.
   let snapshot: SnapshotResult | undefined;
   if (is2xx && probe.finalUrl !== undefined) {
-    const origDomain = registrableDomain(hostnameOf(url));
-    const finalDomain = registrableDomain(hostnameOf(probe.finalUrl));
-    if (origDomain !== finalDomain && finalDomain !== '') {
+    // A rename (known list or same name, other suffix) is decided without the archive.
+    if (redirectKind(url, probe.finalUrl) === 'other') {
       const raw = await wayback.getSnapshotText(url, await archive());
       snapshot = raw.status === 'text' ? { status: 'text', text: cap(raw.text) } : raw;
     }

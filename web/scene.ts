@@ -226,12 +226,14 @@ export function raisePlot(plot: HTMLElement, v: GraveView, showGhost: boolean): 
 // Moon
 // ---------------------------------------------------------------------------
 
-/** p in [0, 1]: 0 is a new moon, 1 is full. The shade slides off the disc by 104 %. */
+/** p in [0, 1]: 0 is a new moon, 1 is full. The shade slides off the disc by 104 %; the glow's opacity is p. */
 export function setMoon(p: number): void {
   const clamped = Math.min(Math.max(p, 0), 1);
   const moon = document.getElementById('moon');
   if (!moon) return;
   moon.style.setProperty('--shade', `${Math.round(clamped * 104)}%`);
+  // The glow's opacity: the same progress, from one place.
+  moon.closest<HTMLElement>('.sky')?.style.setProperty('--progress', clamped.toFixed(2));
   moon.setAttribute('aria-valuenow', String(Math.round(clamped * 100)));
 }
 

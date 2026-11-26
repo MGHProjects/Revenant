@@ -83,7 +83,11 @@ function splitLines(s: string): string[] {
 // ---------------------------------------------------------------------------
 
 function isHttpOrHttps(url: string): boolean {
-  return url.startsWith('http://') || url.startsWith('https://');
+  const m = /^https?:\/\/([^/?#]*)/.exec(url);
+  if (!m) return false;
+  // A URL without a host ("http://", "https:///x") is a scheme fragment, not a link.
+  const host = m[1]!.slice(m[1]!.lastIndexOf('@') + 1).replace(/:\d*$/, '');
+  return host !== '';
 }
 
 // ---------------------------------------------------------------------------
@@ -100,7 +104,11 @@ class LinkMap {
       this.order.push(url);
       this.map.set(url, []);
     }
-    this.map.get(url)!.push({ start, end });
+    const spans = this.map.get(url)!;
+    // The same position can be reached by two scanners (e.g. a reference
+    // definition seen as a reference and as a bare URL); record it once.
+    if (spans.some(s => s.start === start && s.end === end)) return;
+    spans.push({ start, end });
   }
 
   toLinks(): Link[] {
@@ -127,13 +135,17 @@ function collectReferenceDefinitions(
   const defs = new Map<string, { url: string; start: number; end: number }>();
   // Pattern: start of line (optionally up to 3 spaces), [id]: url, optional title
   // We allow any amount of whitespace after the colon.
-  const re = /^[ \t]{0,3}\[([^\]]+)\]:[ \t]+(\S+)/gm;
+  // Destination is `<url with spaces or parens>` or a run of non-whitespace
+  // (balanced parentheses are part of it, as `\S+` takes everything).
+  const re = /^[ \t]{0,3}\[([^\]]+)\]:[ \t]+(?:<([^>\n]*)>|(\S+))/gm;
   let m: RegExpExecArray | null;
   while ((m = re.exec(source)) !== null) {
-    const urlStart = m.index + m[0].indexOf(m[2]!);
+    const angle = m[2] !== undefined;
+    const url = angle ? m[2]! : m[3]!;
+    // Position of the destination itself (after `<` for the angle form).
+    const urlStart = m.index + m[0].length - url.length - (angle ? 1 : 0);
     // Skip if the definition is inside a fenced block
     if (blocked.has(urlStart)) continue;
-    const url = stripTitle(m[2]!);
     if (!isHttpOrHttps(url)) continue;
     const id = m[1]!.toLowerCase();
     if (!defs.has(id)) {
@@ -142,20 +154,6 @@ function collectReferenceDefinitions(
     }
   }
   return defs;
-}
-
-/**
- * Remove an optional title from a URL that may be followed by a quoted title.
- * Example: `https://example.com "Title"` → `https://example.com`
- * In practice the regex above already stops at the first whitespace via `\S+`,
- * so this is a belt-and-suspenders guard against angle-bracket-wrapped URLs.
- */
-function stripTitle(raw: string): string {
-  // Handle angle-bracket wrapping: <url>
-  if (raw.startsWith('<') && raw.endsWith('>')) {
-    return raw.slice(1, -1);
-  }
-  return raw;
 }
 
 export function extractMarkdown(source: string): Link[] {
@@ -188,55 +186,63 @@ function scanInlineLinks(source: string, blocked: Set<number>, links: LinkMap): 
   // for the matching `[`, then extract the URL inside `()`.
   //
   // Strategy: find each `](` occurrence, skip anything in blocked ranges.
-  const re = /\]\(([^)]*)\)/g;
-  let m: RegExpExecArray | null;
-  while ((m = re.exec(source)) !== null) {
-    const parenOpen = m.index + 1; // position of `(`
-    const inner = m[1]!;
+  let from = 0;
+  for (;;) {
+    const at = source.indexOf('](', from);
+    if (at === -1) break;
+    from = at + 2;
+    if (blocked.has(at + 1)) continue; // `(` is inside a fenced block
 
-    // Skip if inside fenced block
-    if (blocked.has(parenOpen)) continue;
-
-    // Extract URL from inner — may have a title: url "title" or url 'title'
-    const url = extractUrlFromParens(inner);
-    if (!url || !isHttpOrHttps(url)) continue;
-
-    // Find where the URL starts within inner
-    const urlOffsetInInner = inner.indexOf(url);
-    if (urlOffsetInInner === -1) continue;
-
-    const urlStart = parenOpen + 1 + urlOffsetInInner;
-    const urlEnd = urlStart + url.length;
-
-    // Sanity: the span must round-trip
-    if (source.slice(urlStart, urlEnd) !== url) continue;
-
-    links.add(url, urlStart, urlEnd);
+    const dest = parseDestination(source, at + 2);
+    if (!dest || !isHttpOrHttps(dest.url)) continue;
+    links.add(dest.url, dest.start, dest.end);
   }
 }
 
 /**
- * Extract the bare URL from the content inside `()` of an inline link.
- * Handles: plain URL, URL followed by quoted title, angle-bracket-wrapped URL.
+ * Parse an inline link destination starting right after `(`.
+ * - `<...>` form: everything up to `>` (spaces and parentheses allowed, no newline).
+ * - Plain form: ends at whitespace, at `>`, or at the first `)` that would take
+ *   the parenthesis depth below zero (CommonMark balanced parentheses).
+ * An optional title after whitespace is left alone. Returns null when the
+ * destination is not followed by `)` or whitespace.
  */
-function extractUrlFromParens(inner: string): string | null {
-  const trimmed = inner.trim();
-  if (!trimmed) return null;
+function parseDestination(
+  source: string,
+  from: number,
+): { url: string; start: number; end: number } | null {
+  let i = from;
+  while (i < source.length && /\s/.test(source[i]!)) i++;
+  if (i >= source.length) return null;
 
-  // Angle-bracket URL: <url>
-  if (trimmed.startsWith('<')) {
-    const closeAngle = trimmed.indexOf('>');
-    if (closeAngle !== -1) {
-      const url = trimmed.slice(1, closeAngle);
-      return url || null;
-    }
-    return null;
+  if (source[i] === '<') {
+    const start = i + 1;
+    let k = start;
+    while (k < source.length && source[k] !== '>' && source[k] !== '<' && source[k] !== '\n') k++;
+    if (source[k] !== '>' || k === start) return null;
+    return { url: source.slice(start, k), start, end: k };
   }
 
-  // Otherwise: URL is the first whitespace-delimited token
-  const spaceIdx = trimmed.search(/\s/);
-  if (spaceIdx === -1) return trimmed;
-  return trimmed.slice(0, spaceIdx);
+  const start = i;
+  let depth = 0;
+  while (i < source.length) {
+    const c = source[i]!;
+    if (c === '\\' && (source[i + 1] === '(' || source[i + 1] === ')')) {
+      i += 2;
+      continue;
+    }
+    if (/\s/.test(c) || c === '>') break;
+    if (c === '(') depth++;
+    else if (c === ')') {
+      if (depth === 0) break;
+      depth--;
+    }
+    i++;
+  }
+  if (i === start) return null;
+  const next = source[i];
+  if (next !== ')' && (next === undefined || !/\s/.test(next))) return null;
+  return { url: source.slice(start, i), start, end: i };
 }
 
 /** Scan for autolinks: `<url>` where url starts with http:// or https:// */
@@ -323,7 +329,8 @@ function scanBareUrls(source: string, blocked: Set<number>, links: LinkMap): voi
   // To avoid matching URLs inside `[text](url)` or `<url>`, we track
   // whether the match position is immediately preceded by `(` or `<`.
 
-  const re = /https?:\/\/[^\s<>)\]"'`,;]*/g;
+  // Parentheses are allowed in the match; unbalanced trailing `)` are trimmed below.
+  const re = /https?:\/\/[^\s<>\]"'`,;]*/g;
   let m: RegExpExecArray | null;
   while ((m = re.exec(source)) !== null) {
     const start = m.index;
@@ -352,17 +359,25 @@ function scanBareUrls(source: string, blocked: Set<number>, links: LinkMap): voi
 
 /** Remove trailing sentence punctuation from a URL token. */
 function trimTrailingPunctuation(url: string): string {
-  // eslint-disable-next-line no-constant-condition
-  while (true) {
+  for (;;) {
     const last = url[url.length - 1];
     if (last === '.' || last === ',' || last === ';' || last === ':' ||
-        last === '!' || last === '?' || last === ')' || last === ']') {
+        last === '!' || last === '?') {
+      url = url.slice(0, -1);
+    } else if (last === ')' && count(url, ')') > count(url, '(')) {
+      // GFM rule: strip a trailing `)` only while the URL has more `)` than `(`.
       url = url.slice(0, -1);
     } else {
       break;
     }
   }
   return url;
+}
+
+function count(s: string, ch: string): number {
+  let n = 0;
+  for (const c of s) if (c === ch) n++;
+  return n;
 }
 
 // ---------------------------------------------------------------------------

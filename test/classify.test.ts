@@ -1,6 +1,9 @@
 import { describe, it, expect } from 'vitest';
 import { classify } from '../src/core/classify.ts';
-import type { Probe } from '../src/core/types.ts';
+import { redirectKind } from '../src/core/redirect-kind.ts';
+import type { Probe, SnapshotResult } from '../src/core/types.ts';
+
+const snapshotNone: SnapshotResult = { status: 'none' };
 
 // Unit tests for classify() â€” one test per decision-table row.
 // Validates: Requirements 2.1, 2.2, 2.3, 2.4, 2.5, 2.6, 2.7, 2.8, 2.9
@@ -162,5 +165,92 @@ describe('classify â€” decision table', () => {
     const result = classify(probe, ORIGINAL_URL, { status: 'none' });
     expect(result.verdict).toBe('alive');
     expect(result.reason).toBe('Redirects to other-site.com; no archived copy to compare.');
+  });
+});
+
+// Task 18.2: a rename is not a possession (Requirements 2.10, 2.11, 2.12).
+describe('classify: renames and too little text', () => {
+  const REALISTIC_LIVE =
+    'Microsoft: AI, cloud, productivity, computing, gaming and apps. Explore Microsoft products and devices, ' +
+    'shop Surface, Xbox, Windows and Microsoft 365, find support and downloads, and sign in to your account. ' +
+    'Developers can browse documentation, tools and open source projects hosted by the company.';
+  const CODEPLEX_SNAPSHOT =
+    'CodePlex is the open source project hosting site. Create a project, browse source control, ' +
+    'track issues and discussions, download releases and read the wiki for each hosted project.';
+  const ok = (url: string): Probe => ({ outcome: 'response', status: 200, finalUrl: url, text: REALISTIC_LIVE });
+
+  it('exercism.io to exercism.org is alive: Moved to exercism.org.', () => {
+    const r = classify(ok('https://exercism.org/'), 'http://www.exercism.io/', snapshotNone);
+    expect(r).toEqual({ verdict: 'alive', reason: 'Moved to exercism.org.' });
+  });
+
+  it('foo.co.uk to foo.com is alive', () => {
+    const r = classify(ok('https://www.foo.com/'), 'https://foo.co.uk/page', { status: 'text', text: snapshotText });
+    expect(r).toEqual({ verdict: 'alive', reason: 'Moved to foo.com.' });
+  });
+
+  it('twitter.com to x.com and mobile.twitter.com to x.com are alive: Moved to x.com.', () => {
+    for (const from of ['https://twitter.com/jack/status/20', 'https://mobile.twitter.com/jack/status/20']) {
+      const r = classify(ok('https://x.com/jack/status/20'), from, { status: 'text', text: snapshotText });
+      expect(r).toEqual({ verdict: 'alive', reason: 'Moved to x.com.' });
+    }
+  });
+
+  it('a rename holds when the archive is unavailable', () => {
+    const r = classify(ok('https://x.com/a'), 'https://twitter.com/a', { status: 'unavailable' });
+    expect(r).toEqual({ verdict: 'alive', reason: 'Moved to x.com.' });
+  });
+
+  it('geocities.com to yahoo.com stays possessed', () => {
+    const r = classify(
+      { outcome: 'response', status: 200, finalUrl: 'https://www.yahoo.com/', text: lowSimilarityLiveText },
+      'http://geocities.com/',
+      { status: 'text', text: snapshotText },
+    );
+    expect(r.verdict).toBe('possessed');
+    expect(r.reason).toBe('Redirects to yahoo.com; 0% like the archived page.');
+  });
+
+  it('codeplex.com to microsoft.com stays possessed with realistic text', () => {
+    const r = classify(ok('https://www.microsoft.com/es-es'), 'http://codeplex.com/', {
+      status: 'text',
+      text: CODEPLEX_SNAPSHOT,
+    });
+    expect(r.verdict).toBe('possessed');
+    expect(r.reason).toMatch(/^Redirects to microsoft\.com; \d+% like the archived page\.$/);
+  });
+
+  it('a live page with too little text is restless with the exact sentence', () => {
+    const r = classify(
+      { outcome: 'response', status: 200, finalUrl: 'https://www.yahoo.com/', text: 'Sign in' },
+      'http://geocities.com/',
+      { status: 'text', text: snapshotText },
+    );
+    expect(r).toEqual({
+      verdict: 'restless',
+      reason: 'Redirects to yahoo.com; the new page has too little text to compare. Not judged.',
+    });
+  });
+
+  it('snapshot none and snapshot unavailable rows are unchanged, even with little text', () => {
+    const probe: Probe = { outcome: 'response', status: 200, finalUrl: 'https://other-site.com/', text: 'Sign in' };
+    expect(classify(probe, ORIGINAL_URL, snapshotNone)).toEqual({
+      verdict: 'alive',
+      reason: 'Redirects to other-site.com; no archived copy to compare.',
+    });
+    expect(classify(probe, ORIGINAL_URL, { status: 'unavailable' })).toEqual({
+      verdict: 'restless',
+      reason: 'Redirects to other-site.com; the archive could not be reached to compare. Not judged.',
+    });
+  });
+});
+
+describe('redirectKind', () => {
+  it('tells same-site, moved and other apart', () => {
+    expect(redirectKind('https://a.example.com/', 'https://b.example.com/x')).toBe('same-site');
+    expect(redirectKind('http://exercism.io/', 'https://exercism.org/')).toBe('moved');
+    expect(redirectKind('https://m.twitter.com/a', 'https://x.com/a')).toBe('moved');
+    expect(redirectKind('http://geocities.com/', 'https://www.yahoo.com/')).toBe('other');
+    expect(redirectKind('http://example.com/', 'not a url')).toBe('same-site');
   });
 });

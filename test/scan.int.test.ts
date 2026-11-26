@@ -67,7 +67,7 @@ const SNAPSHOT_TEXT_POSSESSED =
 
 // Live page body for the possessed URL — no shared 3-word shingles with the snapshot.
 const LIVE_TEXT_POSSESSED =
-  'fresh modern spam advertisement buy now limited offer discount sale promotion';
+  'fresh modern spam advertisement buy now limited offer discount sale promotion' + ' ' + 'shop thousands of bargains updated hourly from favourite brands, free delivery on orders over fifty dollars, sign up for exclusive vouchers and discount codes sent weekly to your inbox';
 
 const fakeWayback: Wayback = {
   async getArchive(url: string): Promise<ArchiveAnswer> {

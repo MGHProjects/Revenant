@@ -25,7 +25,7 @@
       "matcher": "web/.*\\.(ts|css|html)$",
       "action": {
         "type": "agent",
-        "prompt": "A web file changed. Review it against .kiro/steering/costume.md: verdict is never colour-only, prefers-reduced-motion is honoured, new controls are keyboard reachable, and no decorative element was added that carries no meaning. Fix violations; otherwise say nothing."
+        "prompt": "A web file changed. Review it against .kiro/steering/costume.md, including its Scenery rule. Elements inside .horizon are allowed when they follow the Scenery rule: static, ink only (#0b0d12 and #141b2d), aria-hidden, no verdict shape and no verdict colour. Flag scenery that breaks that rule, and flag decoration outside the horizon that carries no meaning. Also check: verdict is never colour-only, prefers-reduced-motion is honoured, new controls are keyboard reachable. Fix violations; otherwise say nothing."
       }
     }
   ]

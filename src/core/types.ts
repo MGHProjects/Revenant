@@ -129,7 +129,14 @@ export type ClosestSnapshot =
   | { status: 'none' }
   | { status: 'unreachable' };
 
-/** Events yielded by the `scan()` async generator. */
+/**
+ * Events yielded by the `scan()` async generator.
+ *
+ * Contract: a later `judgement` event for the same URL (`judgement.link.url`) replaces the earlier
+ * one. After the pool finishes, `scan()` asks once more for the links whose judgement has
+ * `archiveUnavailable` and emits those answers as additional `judgement` events. The final
+ * judgement per URL is the last one received. At most two events exist for a URL.
+ */
 export type ScanEvent =
   | { type: 'meta'; total: number; capped: boolean; capLimit: 200 }
   | { type: 'judgement'; judgement: Judgement }

@@ -71,8 +71,8 @@ describe('Worker and scan() agree on a cross-domain redirect', () => {
     // Before the fix scan() compared the raw HTML (scripts and styles included) with the
     // snapshot's visible text, scored under 0.2 and reported `possessed`.
     stub(page(PROSE), page(PROSE));
-    const w = await viaWorker('http://www.parity-alive-w.example.org/');
-    const s = await viaScan('http://www.parity-alive-s.example.org/');
+    const w = await viaWorker('http://www.parity-alive-w.oldsite.org/');
+    const s = await viaScan('http://www.parity-alive-s.oldsite.org/');
     expect(w.verdict).toBe('alive');
     expect(w.reason).toBe('Answers 200 with the page you cited.');
     expect(s.verdict).toBe(w.verdict);
@@ -81,11 +81,11 @@ describe('Worker and scan() agree on a cross-domain redirect', () => {
 
   it('unrelated live page → possessed in both doors', async () => {
     stub(
-      page('Buy cheap pills online today, casino bonuses, win big prizes, click here for free spins and crypto offers now'),
+      page('Buy cheap pills online today, casino bonuses, win big prizes, click here for free spins and crypto offers now, sign up today for exclusive vouchers and discount codes sent directly to your inbox every week'),
       page(PROSE),
     );
-    const w = await viaWorker('http://www.parity-zombie-w.example.org/');
-    const s = await viaScan('http://www.parity-zombie-s.example.org/');
+    const w = await viaWorker('http://www.parity-zombie-w.oldsite.org/');
+    const s = await viaScan('http://www.parity-zombie-s.oldsite.org/');
     expect(w.verdict).toBe('possessed');
     expect(s.verdict).toBe('possessed');
     expect(s.reason).toBe(w.reason);

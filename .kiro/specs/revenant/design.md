@@ -20,7 +20,7 @@ The central design principle is a **pure core with thin doors**: all logic lives
 | Layer | Location | Responsibility |
 |---|---|---|
 | Core | `src/core/` | Pure functions only: `extract`, `guard`, `similarity`, `classify`, `patch`, `visible-text` |
-| Net | `src/net/` | Stateful I/O: `fetcher`, Wayback client, `judge-link` (the one per-link judgement), `scan` async generator |
+| Net | `src/net/` | Stateful I/O: `fetcher`, Wayback client, `archive-queue` (one line for all Internet Archive traffic), `judge-link` (the one per-link judgement), `scan` async generator |
 | Worker | `src/worker/` | Cloudflare Worker: `POST /api/scan` (JSON, 3-URL batches), `POST /api/resolve`, static asset serving |
 | Web | `web/` | Vite + vanilla TypeScript: Graveyard UI, extract logic, batch orchestration |
 | CLI | `src/cli/` | Node.js entry point: argument parsing, file I/O, process exit |
@@ -90,6 +90,9 @@ type ScanEvent =
   | { type: 'meta'; total: number; capped: boolean; capLimit: 200 }
   | { type: 'judgement'; judgement: Judgement }
   | { type: 'error'; message: string };
+// Contract: a later `judgement` event for the same URL (judgement.link.url) replaces the earlier one.
+// scan() emits one judgement per link, then, after the pool finishes, one more for each link whose
+// judgement had `archiveUnavailable`. The final judgement per URL is the last one received.
 ```
 
 ### Core Functions (`src/core/`)
@@ -105,6 +108,13 @@ For **Markdown**, recognises:
 - Reference links: `[text][id]` with a `[id]: url` definition elsewhere in the source
 - Autolinks: `<url>`
 - Bare URLs: tokens starting with `http://` or `https://` not enclosed in `<>` or `[]()`
+
+Parentheses (CommonMark balanced parentheses):
+- Inline destination (`parseDestination`): leading whitespace is skipped. `<...>` takes everything up to `>` (spaces and parentheses allowed, no newline). Otherwise a depth counter runs: `(` adds one, `)` subtracts one, and the destination ends at whitespace, at `>`, or at the first `)` that would take the depth below zero. `\(` and `\)` are not counted. The destination must be followed by `)` or whitespace (an optional `"title"`, `'title'` or `(title)` follows). The span is exactly the destination.
+- Reference definitions `[id]: url` and `[id]: <url>`: the destination is the `\S+` run or the `<...>` content; the span excludes the angle brackets. Autolinks `<url>` take everything up to `>`, so parentheses are kept.
+- Bare URLs: the token runs to whitespace or one of `<>]"'` `,;`. Then trailing `.,;:!?` are stripped, and a trailing `)` is stripped only while the URL has more `)` than `(` (GFM). A bare URL directly after `(` or `<` is left to the inline or autolink scanner.
+- A URL with no host (`http://`, `https:///x`) is not extracted in any form, including HTML.
+- A span recorded twice for the same position (a reference definition reached as a reference and as a bare URL) is kept once.
 
 For **HTML**, extracts the `href` attribute from every `<a>` element.
 
@@ -152,6 +162,8 @@ Decision table, evaluated top to bottom; first match wins:
 | `status` is 403 or 429 | `restless` | `Answers {status} to robots. Not judged.` |
 | `status` is 404 or 410 | `dead` | `Answers {status}.` |
 | `status` is 5xx (after retry) | `restless` | `Answers {status}, twice. Not judged.` |
+| `status` is 2xx AND `redirectKind(url, finalUrl)` is `moved` (known rename in `known-renames.ts`, or same name label under another public suffix). Checked first for a cross-domain 2xx, needs no snapshot; `judgeLink` makes no Wayback call for it | `alive` | `Moved to {domain}.` |
+| `status` is 2xx AND `finalUrl` has a **different** registrable domain AND `snapshot` is `text` AND the live visible text is shorter than `MIN_LIVE_TEXT_CHARS` (200) | `restless` | `Redirects to {domain}; the new page has too little text to compare. Not judged.` |
 | `status` is 2xx AND `finalUrl` has a **different** registrable domain AND `snapshot` is `text` AND `similarity(probe.text, snapshot.text) < 0.2` | `possessed` | `Redirects to {domain}; {n}% like the archived page.` |
 | `status` is 2xx AND `finalUrl` has a **different** registrable domain AND `snapshot` is `unavailable` (archive could not be reached) | `restless` | `Redirects to {domain}; the archive could not be reached to compare. Not judged.` |
 | `status` is 2xx AND `finalUrl` has a **different** registrable domain AND `snapshot` is `none` or absent | `alive` | `Redirects to {domain}; no archived copy to compare.` |
@@ -181,7 +193,8 @@ The concrete network function injected into all doors. The core never imports it
 - **Redirect handling**: follows redirects manually, calling `guard()` on each redirect target before following it. Rejects after 5 redirects with a `network-error` Probe.
 - **DNS confirmation**: one shared helper, `confirmNoDns(host)` in `src/net/dns.ts`, used when `fetch` throws (not on abort) and when any hop answers HTTP 530 (Cloudflare error 1016, which is how Workers report a host that does not resolve). It queries `https://cloudflare-dns.com/dns-query?name={host}&type=A` (`accept: application/dns-json`, 3 s timeout). `Status: 3` confirms. `Status: 0` with no A answer triggers one `type=AAAA` query; `Status: 0` with no AAAA answer confirms (CNAME-only answers count as no record). Anything else (records present, other status, DoH error, timeout, non-2xx) is "not confirmed". It never throws. A confirmed failure yields `Probe { outcome: 'network-error', dnsFailure: true }` (`dead`, "The domain no longer resolves.") and is never retried. An unconfirmed 530 is returned as a normal 5xx response that carries `noRetry` (any DoH query spent, to keep the subrequest budget) and classifies as `Answers 530. Not judged.`. No DoH query for guard rejections or redirect errors.
 - **Subrequest budget** (free plan: 50 per invocation; every fetch counts, and so do Cache API `match`/`put` calls): worst case per URL is **16** (`PER_URL_WORST_CASE` in `src/net/judge-link.ts`), so 3 URLs = 48. A 5xx twice (6 hops + 6 hops on the retry, which passes `skipDns` and makes no DoH query) followed by a cross-domain 2xx costs 12 + CDX 2 + `id_` 2 = 16, where each Wayback call is 1 plus 1 retry after a 429. A thrown fetch on the 6th hop with a confirmed DNS failure is 6 + 2 DoH + CDX 2 = 10. A 530 on the 6th hop with DoH queries is not retried and skips Wayback (8). Redirect hops and 530/429/non-2xx Wayback bodies are cancelled unread, which also frees the 6 connection slots. The Worker makes no Cache API calls. `test/worker-budget.test.ts` forces each path and counts fetch plus cache calls.
-- **Timeout**: 8-second deadline; returns `Probe { outcome: 'timeout' }` on expiry.
+- **Archive hosts**: `createFetcher({ archiveQueue })` builds a fetcher whose hops to `archive.org`, `web.archive.org` or any `*.archive.org` host run inside the archive queue (next section). The check is per hop, on the host of the URL about to be requested: the initial URL and every redirect target, so a redirect that lands on the archive on any hop waits for the queue too, and a hop that leaves it does not. Each hop is still guarded before it is followed and the limit stays 5 redirects (6 requests). A 429 or 503 from such a hop that carries `Retry-After` calls `queue.penalize`, so the next archive request waits for everyone. The plain `fetcher` export has no queue (used by tests and by `/api/resolve`).
+- **Timeout**: 8-second deadline; returns `Probe { outcome: 'timeout' }` on expiry. Time spent waiting in the archive queue does not count: the deadline is a budget that is paused while a hop waits, and the hop's own limit starts when it starts.
 - **Body size**: reads at most 512 KB. If the body exceeds that limit, reading stops and the truncated body is used as the full response (the request is **not** treated as an error).
 - **5xx retry**: the `scan` orchestrator (not the fetcher) retries once after 2 seconds when the first response is 5xx.
 
@@ -211,9 +224,25 @@ interface WaybackCacheEntry {
 }
 ```
 
-**429 back-off**: wait for the `Retry-After` header value (capped at 10 s), retry once; on second failure set Epitaph to `'unavailable'`. An empty CDX result (`[]` or header row only) sets Epitaph to `'none'`. `'unavailable'` is never cached; `'none'` is cached 24 h. The same holds for `getSnapshotText`: `{ status: 'unavailable' }` (CDX lookup or `id_` body failed) is returned but never stored, in memory, so a later call asks the archive again; `{ status: 'text' }` and `{ status: 'none' }` are cached 24 h.
+**429 back-off**: a 429 sets a pause of the `Retry-After` value (seconds or HTTP-date, capped at 10 s; 1 s when the header is absent) on the archive queue, then the request is retried once as a new queue entry, so it starts after the pause; on second failure set Epitaph to `'unavailable'`. A 503 with `Retry-After` sets the same pause but is not retried. An empty CDX result (`[]` or header row only) sets Epitaph to `'none'`. `'unavailable'` is never cached; `'none'` is cached 24 h. The same holds for `getSnapshotText`: `{ status: 'unavailable' }` (CDX lookup or `id_` body failed) is returned but never stored, in memory, so a later call asks the archive again; `{ status: 'text' }` and `{ status: 'none' }` are cached 24 h.
 
-**Unreachable / timeout**: on connection error, HTTP error response, or no response within 10 s, retain existing verdict and set Epitaph to `'unavailable'`.
+**Unreachable / timeout**: on connection error, HTTP error response, or no response within 10 s (counted from the moment the request starts, not from when it was queued), retain existing verdict and set Epitaph to `'unavailable'`.
+
+#### Archive queue (`src/net/archive-queue.ts`)
+
+The Internet Archive throttles clients that send several CDX and `id_` requests at once. A field test on 26 Nov 2026 (200 links, six in flight) got "the archive could not be reached" for 13 of 14 cross-domain links and no archived copy for 7 of 8 dead links in one README and 4 of 4 in another. All traffic to the archive now goes through one `ArchiveQueue`:
+
+- **One at a time, with a gap.** `run(task, { timeoutMs })` starts a task when the previous one has finished and at least `minGapMs` after the previous start.
+- **Penalty.** `penalize(ms)` sets "no request starts before now + ms" (the longest pending penalty wins). It affects every waiter, not just the caller. `parseRetryAfter` reads seconds or an HTTP-date and caps the value at 10 s.
+- **Timeout.** Each task gets an `AbortSignal` that fires `timeoutMs` (10 s) after the task starts. Waiting in the queue does not count. A task that ignores the signal is released with `ArchiveTimeoutError` once the time is up, so the queue cannot stall.
+- **A throwing task** rejects its caller only; the next task runs.
+- **No shared state.** `createArchiveQueue({ minGapMs, clock? })` returns an instance with its own line. The clock (`now`, `setTimeout`, `clearTimeout`) is injectable, so tests use a fake clock and wait for nothing. The only module-level value is `defaultArchiveQueue()`, a lazy instance for the CLI and MCP doors, reset with `resetDefaultArchiveQueue()`.
+- **The gap constant** is `ARCHIVE_MIN_GAP_MS = { node: 1000, worker: 300 }`, exported from `archive-queue.ts`. The CLI (`src/cli/run.ts`) and MCP (`startStdio`) use the default queue, which takes `node`. The Worker builds one queue per `/api/scan` request with `ARCHIVE_MIN_GAP_MS.worker` and passes it to both `createFetcher` and `createWaybackClient`, so nothing is shared between requests.
+- **What goes through it**: the CDX request, the `id_` body and the availability API (`getClosestSnapshot`) in `wayback.ts`, and every fetcher hop to an archive host. `createWaybackClient()` without a queue makes a private one with no gap, so existing fakes and tests behave as before.
+
+The queue changes timing, not call counts: the Worker budget (`PER_URL_WORST_CASE` = 16, 3 x 16 = 48) is unchanged and `test/worker-budget.test.ts` still counts it.
+
+**Added latency for a 3-URL Worker batch** (from the code, not measured): a possessed link makes at most 2 archive requests (CDX, then `id_`), so three possessed links make 6, and the queue runs them one after another with 300 ms between starts: at least 5 x 300 = 1.5 s of waiting, plus the requests no longer overlap, so the batch takes the sum of their durations instead of the longest. With a 429 on every CDX and `id_` (the budget's worst case, 12 requests) the gaps add 11 x 300 = 3.3 s and each Retry-After adds up to 10 s. A request that hangs holds the line for at most 10 s. `/api/scan` sends nothing until the batch is done and has no hard limit of its own. The browser's `fetch` has no timeout in `web/`, so a slow batch only keeps its tombs under the mist longer. The browser sends 2 batches at a time and each Worker request has its own queue, so up to two archive requests can be in flight from the Worker, one per batch.
 
 #### `scan(input: string, kind: InputKind, fetcher: Fetcher, wayback: Wayback, now: Date)` — async generator
 
@@ -223,7 +252,7 @@ type InputKind = 'markdown' | 'html' | 'url' | 'repo';
 
 Yields `ScanEvent` objects. Used by CLI and MCP only. The Worker calls `judgeLink` directly for each URL of a batch; `scan` does the same for each link in its pool, so every door gives the same verdict for the same link.
 
-The five steps:
+The six steps:
 
 1. **Resolve input**: if `kind` is `'url'`, fetch the page and detect `Content-Type` for effective parse kind. If `kind` is `'repo'`, fetch the default-branch README from the GitHub API as Markdown. On failure or undetectable content type: yield `{ type: 'error', message }` and halt.
 2. **Extract**: call `extract(source, effectiveKind)` → `Link[]`.
@@ -236,6 +265,9 @@ The five steps:
    - If `dead` or `possessed`: call `wayback.getArchive(url)` → Epitaph and Resurrection from the chosen capture (reusing the answer already fetched for the snapshot text).
    - Yield `{ type: 'judgement', judgement }`.
 5. **Same-domain alive links** cost zero Wayback calls.
+6. **Final retry.** When the pool has finished, `scan` collects the judgements with `archiveUnavailable` (set by `judgeLink`) and calls `judgeLink` once more for exactly those links, with the same `deps`, through the same pool of 6 (archive work is serialised by the archive queue inside the fetcher and the Wayback client). Each answer is emitted as another `{ type: 'judgement' }` event and supersedes the earlier judgement of the same URL (see the `ScanEvent` contract). It runs once: a judgement that is still flagged afterwards is final. Restless links whose cause is the site (403, 429, timeout, 5xx) carry no flag and are never retried.
+
+**Consumers of the event stream.** A door keeps the last judgement per URL (a `Map` keyed by `link.url`, in the order URLs first appeared). The CLI `--json`, `--fix`, summary line and exit code, and the MCP `check_links` result, use that final judgement, so each URL appears once. The CLI streaming output (no `--json`, no `--fix`) prints each link's first line as soon as it arrives, as before. For a superseded link it prints the new line, marked ` [asked again]`, only when it differs from the line already shown (verdict, reason or archive copy changed); a link that turns `alive` prints a line too, so the earlier restless line is not left standing; an unchanged answer prints nothing.
 
 #### `judgeLink(link, { fetcher, wayback, sleep }, { textCap? })` (`src/net/judge-link.ts`)
 
@@ -250,12 +282,12 @@ A Hono application running on the Cloudflare free plan (50 subrequests, 10 ms CP
 - Request body: `{ urls: string[] }` — at most 3 URLs. Body size limit enforced in code (not relying on runtime defaults).
 - Response: `{ judgements: Judgement[] }` as plain JSON.
 - Errors: `{ error: string }` with appropriate 4xx status. Stack traces never exposed.
-- Internally: runs `judgeLink` (guard included) for each URL concurrently with `textCap: 65536`, staying under 50 subrequests. For the `possessed` check, `similarity` is applied to the first 64 KB of visible text.
+- Internally: runs `judgeLink` (guard included) for each URL concurrently with `textCap: 65536`, staying under 50 subrequests. The request builds one archive queue (`ARCHIVE_MIN_GAP_MS.worker`, 300 ms) shared by its fetcher and its Wayback client, so the archive requests of the three links run one at a time. For the `possessed` check, `similarity` is applied to the first 64 KB of visible text.
 
 **`POST /api/resolve`**
 
 - Request body: `{ input: string, kind: 'url' | 'repo' }`.
-- Response: `{ source: string, kind: 'markdown' | 'html' }` — the fetched and content-typed source text.
+- Response: `{ source: string, kind: 'markdown' | 'html', file?: string }` — the fetched and content-typed source text. `file` is present for `kind: 'repo'` only: the README's name when a raw name answered (`README.md`, `readme.md`, `README`, `Readme.md`, `README.markdown`), or the API's `path` (`docs/README.md`) falling back to its `name`. `resolveRepoReadme` returns it as `file`. The web page turns it into the ledger's GitHub link with `githubFileUrl` (`web/github-file.ts`, pure: validated owner/repo, relative path without `..`, each segment encoded; `blob/HEAD` until the edit form is checked in a logged-in browser).
 - Errors: `{ error: string }`. 400 for invalid JSON or input. 500 `{ error: "Internal error" }` for unexpected exceptions (never a stack trace; same on `/api/scan`). For `kind: 'url'` the shared `fetcher` is used (guard on every redirect hop, max 5; 8 s timeout covering the body read; 512 KB cap, truncation is not an error). Kind comes from the Content-Type header (`Probe.contentType`) or a body sniff. 422 when the address cannot be loaded: non-2xx (`it answered {status}`), timeout (`no answer within 8 s`), guard rejection (`That address is not allowed: {reason}`, `Probe.blocked`), confirmed DNS failure (`the domain no longer resolves`), or other network error. For `kind: 'repo'`: 404 not found (or no README), 429 GitHub rate limit, 400 invalid `owner/repo`, 502 GitHub unreachable.
 - Repo input uses `resolveRepoReadme(slug, fetchImpl?, githubToken?)` in `src/net/github-readme.ts`, shared with `scan.ts`. Flow: (1) sequentially request `https://raw.githubusercontent.com/{owner}/{repo}/HEAD/{name}` for `README.md`, `readme.md`, `README`, `Readme.md`, `README.markdown`, stopping at the first 200 (decoded as UTF-8 through the capped reader, kind `markdown` for every name; bodies of non-200 answers are cancelled; any non-200 or network error moves to the next name). (2) Only if none answered 200, `GET https://api.github.com/repos/{owner}/{repo}/readme` (any file name, `docs/`), decoding `content` as base64 bytes then UTF-8 and falling back to `download_url` (`raw.githubusercontent.com` only) when content is empty. API 404 is `not-found`, 403 with `x-ratelimit-remaining: 0` or 429 is `rate-limited`, other statuses and network errors are `unavailable`. `githubToken` is sent as `Authorization: Bearer` to the API only, never to raw, and never logged. It is a parameter because `src/net` does not read `process.env`: the CLI passes `process.env.GITHUB_TOKEN`, and the Worker passes its optional `GITHUB_TOKEN` secret. Budget: `/api/resolve` has its own 50 subrequests; worst case is 5 raw + 1 API = 6, and a hit on `README.md` costs 1. 8 s timeout, 512 KB body cap.
 - Used by the browser before it starts batching, so the browser can run `extract` locally.
@@ -263,7 +295,7 @@ A Hono application running on the Cloudflare free plan (50 subrequests, 10 ms CP
 Static assets are served from `dist/` (the Vite build output). `wrangler.toml` uses `[assets]` (not the legacy `[site]` bucket).
 
 ### Ask again (`web/ask-again.ts`, `web/graveyard.ts`)
-`Judgement.archiveUnavailable?: true` is set in one place in `judgeLink` (after classify), from structured values: a restless verdict with snapshot `'unavailable'`, or a dead/possessed judgement whose epitaph is `'unavailable'`. The pure module `ask-again.ts` has `canAskAgain` (restless, or flagged), `retryIndexes` (flagged links, for the automatic retry), `chunk` and `mergeJudgement`. `graveyard.ts` runs `askAgain(index)` (one URL to `/api/scan`) and, at scan end, `retryArchive(gen)` once: batches of 3, 2 in flight, no reveal wait, results discarded when `scanGen` changed. Both use `applyReplacement`, which swaps the plot `li`, the ledger row and the inscription, then re-renders tally and patch note. The CLI `--json` and MCP output carry the flag; neither retries.
+`Judgement.archiveUnavailable?: true` is set in one place in `judgeLink` (after classify), from structured values: a restless verdict with snapshot `'unavailable'`, or a dead/possessed judgement whose epitaph is `'unavailable'`. The pure module `ask-again.ts` has `canAskAgain` (restless, or flagged), `retryIndexes` (flagged links, for the automatic retry), `chunk` and `mergeJudgement`. `graveyard.ts` runs `askAgain(index)` (one URL to `/api/scan`) and, at scan end, `retryArchive(gen)` once: batches of 3, 2 in flight, no reveal wait, results discarded when `scanGen` changed. Both use `applyReplacement`, which swaps the plot `li`, the ledger row and the inscription, then re-renders tally and patch note. The CLI `--json` and MCP output carry the flag when the archive was still unavailable after `scan`'s own final retry (step 6 of `scan`).
 
 ### Web UI (`web/`)
 
@@ -301,15 +333,17 @@ The moon icon advances one step per batch received. Batching: the browser extrac
 
 **Graveyard address** (`web/scan-address.ts`, wired in `web/graveyard.ts`): the pure module has `parseScanParams(search)` (precedence sample > repo > url; the first one present wins, and an invalid value is reported, never skipped) and `searchAfterScan(search, origin)`, where origin is `sample`, `address` or `text`. `url` is validated with the core `guard`, which has no network code and is bundled in the browser, so the browser and the Worker apply the same host rules. After `resolve` succeeds, `graveyard.ts` calls `history.replaceState` with the new query, so the back button is unaffected. Textarea scans clear `sample`, `repo` and `url`; the document is never an input of `searchAfterScan`. The "Copy link" `.btn.sm` sits under the sub-heading and is shown only when `shareable` is true.
 
+**Hero input and result headline** (`web/index.html`, `web/graveyard.ts`, `web/result-headline.ts`): the hero holds, in DOM order, the status `<h1>`, the explanation (`#intro`), Copy link, the tally, the address form (`#hero-form`: label, `#address`, "Scan its links" `.btn.go`, `#address-error`) and the "Try:" row (`#try`: three plain anchors to `/?repo=...` and "Scan the sample" `.btn`). The address field has one id, `address`, and lives only in the hero; the lower form holds the textarea ("Or paste a document") and a secondary "Scan the document". `scan(mode)` takes `address`, `sample` or `text`: the hero form scans `address`, the lower form clears the address and scans `text`. Errors go to the paragraph of the field the scan came from (`errorField`); `showError` sets `aria-invalid` and `aria-describedby` on that field and `clearError` removes them. `syncChrome` shows the parts per state: **idle or failed without results** form, explanation, Try row; **scanning** none of them (focus moves to the `<h1>` if it was inside); **results** the form only, below the tally, so the user can scan another address and the page never strands them. `resultHeadline({ total, dead, possessed, fixable, restless, failed })` is pure; `renderHeadline` builds its input from the plots on screen and runs at scan end and on every `renderTally` once `finished` is set, so Ask again and the automatic retry update it. The live region announces the final text once at the end.
+
 ### CLI (`src/cli/`)
 
 Entry point: `revenant <file|url> [--fix] [--json]`
 
-Reads a file or URL, runs `scan` with the default `fetcher` and default `wayback` (no free-plan limits on Node), collects all `Judgement` objects from the `ScanEvent` stream.
+Reads a file or URL, runs `scan` with a fetcher and a Wayback client that share the default archive queue (1 s gap; no free-plan limits on Node), and keeps the final `Judgement` per URL from the `ScanEvent` stream.
 
-- Default: one line per non-`alive` link — URL, verdict, reason, Resurrection (or placeholder). No output if all alive. Exit 1 if any `dead` or `possessed`; exit 0 otherwise.
-- `--fix`: overwrite file in place with `patch()` output for `dead` and `possessed` links. Error if input is a URL.
-- `--json`: print `CliOutput` JSON; suppress per-line format. Error output is JSON when `--json` is set.
+- Default: one line per non-`alive` link as it arrives — URL, verdict, reason, Resurrection (or placeholder). A superseding judgement (final retry) prints a second line ending ` [asked again]` only when it differs from the first; see "Consumers of the event stream". No output if all alive. Exit 1 if any final judgement is `dead` or `possessed`; exit 0 otherwise.
+- `--fix`: overwrite file in place with `patch()` output for the final `dead` and `possessed` judgements. Error if input is a URL.
+- `--json`: print `CliOutput` JSON with one entry per URL (the final judgement); suppress per-line format. Error output is JSON when `--json` is set.
 
 ### MCP Server (`src/mcp/`)
 
@@ -404,9 +438,9 @@ For any strings `a` and `b`: `similarity(a, b)` is in `[0, 1]`; `similarity(a, a
 
 ### Property 6: Never cry wolf
 
-For any `Probe` with status 401, 403, or 429, `classify` never returns `dead`. For any `Probe` with `outcome === 'timeout'`, `classify` never returns `dead`. For any `Probe` with `status` 5xx (the after-retry path), `classify` returns `restless`, not `dead`. For any `Probe` with `outcome === 'network-error'` and no `dnsFailure`, `classify` never returns `dead` (6f). For any `Probe`, `classify` returns exactly one verdict and a non-empty reason. For any `Probe` whose `finalUrl` shares the same registrable domain as the requested URL, `classify` never returns `possessed`.
+For any `Probe` with status 401, 403, or 429, `classify` never returns `dead`. For any `Probe` with `outcome === 'timeout'`, `classify` never returns `dead`. For any `Probe` with `status` 5xx (the after-retry path), `classify` returns `restless`, not `dead`. For any `Probe` with `outcome === 'network-error'` and no `dnsFailure`, `classify` never returns `dead` (6f). For any `Probe`, `classify` returns exactly one verdict and a non-empty reason. For any `Probe` whose `finalUrl` shares the same registrable domain as the requested URL, `classify` never returns `possessed`. Sub-properties 6h to 6j: a redirect to the same name label under another public suffix is never `possessed` (6h); a known rename, also from a subdomain, is never `possessed` (6i); a live text shorter than `MIN_LIVE_TEXT_CHARS` is never `possessed` (6j).
 
-**Validates: Requirements 2.2, 2.3, 2.4, 2.8, 2.9**
+**Validates: Requirements 2.2, 2.3, 2.4, 2.8, 2.9, 2.11, 2.12, 2.13**
 
 ### Property 7: The guard holds
 
@@ -461,6 +495,28 @@ For any valid `owner/name` or http(s) page URL and any unrelated parameters, `pa
 ### Property 16: host parts join back to the host
 For any host string, `hostParts` (`web/host-parts.ts`) returns parts that join back to exactly that host, each part except the last ends with a dot, and no part other than the last contains another dot, so a label can break only after a dot.
 **Validates: Requirements 6.2**
+
+### Property 17: mist opacity stays in range and follows what is unjudged
+
+For any `total`, `judged` and `restless`, `mistOpacity` (`web/mist.ts`) is in [0, 1]. With `restless` fixed it never rises as `judged` grows, and with `judged` fixed it never falls as `restless` grows. Total 0 gives 1.
+**Validates: Requirements 6.1, 6.7**
+
+### Property 18: Balanced parentheses survive extraction and patching
+
+For any URL with 0 to 3 balanced parenthesis groups (possibly nested) placed in `[text](url)`, with or without a title, `extract` returns exactly that URL with one span whose slice equals the URL, and `patch` with a `dead` judgement and a resurrection changes only that span: the output equals `source.slice(0, start) + resurrection + source.slice(end)`.
+
+**Validates: Requirements 1.1, 1.2, 4.2**
+
+### Property 19: One final judgement per URL
+
+For any list of distinct URLs whose archive answers are always fine, unavailable once, or always unavailable, the CLI `--json` output lists exactly those URLs in document order, once each. A link that was unavailable once carries the resurrection of the second answer; a link that is always unavailable is asked exactly once more and keeps `archiveUnavailable`.
+
+**Validates: Requirements 3.3, 3.4, 7.2**
+
+### Property 20: The result headline states the counts and the grammar is right
+
+For any counts of alive, dead, possessed and restless judged links, any number of failed links and any `fixable ≤ dead + possessed`, `resultHeadline` (`web/result-headline.ts`) never contains "1 links" or "1 are", states `gone of judged` and `fixable` (or "None") when something is gone, states "All {judged}" otherwise, ends with "{restless} could not be judged." exactly when restless > 0, starts with "{judged} of {total} links judged." when links failed, and `gone + alive + restless === judged`.
+**Validates: Requirements 6.15, 6.17**
 
 ## Error Handling
 

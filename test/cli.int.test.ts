@@ -34,7 +34,7 @@ const RESURRECTION_URL_POSSESSED = 'https://web.archive.org/web/20210615000000/h
 const SNAPSHOT_TEXT_POSSESSED =
   'ancient original words about revenant project history documentation';
 const LIVE_TEXT_POSSESSED =
-  'buy now discount casino poker gambling slots promotion special offer';
+  'buy now discount casino poker gambling slots promotion special offer' + ' ' + 'shop thousands of bargains updated hourly from favourite brands, free delivery on orders over fifty dollars, sign up for exclusive vouchers and discount codes sent weekly to your inbox';
 
 const fakeWayback: Wayback = {
   async getArchive(url: string): Promise<ArchiveAnswer> {

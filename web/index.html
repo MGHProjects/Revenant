@@ -21,7 +21,7 @@
 <body>
 <div class="rv">
 
-<header class="top">
+<header class="sky">
   <div class="wrap">
     <div class="bar">
       <span class="fell mark">Revenant</span>
@@ -30,28 +30,85 @@
 
     <div class="hero">
       <div class="hero-text">
-        <h1 class="fell status" id="status" tabindex="-1">Paste a document. Its links rise here.</h1>
-        <p class="sub">Dead and possessed links come back from the Internet Archive.</p>
+        <h1 class="fell status" id="status" tabindex="-1">Bring your dead links back.</h1>
+        <p class="sub" id="intro">Give Revenant a GitHub repo, a page or a pasted document. It finds the links that died or now lead somewhere else, and returns the document with each one pointing to its archived copy.</p>
         <div class="copy-row">
           <button type="button" class="btn sm" id="copy-link" hidden>Copy link</button>
           <input type="text" class="field mono" id="copy-fallback" readonly hidden aria-label="Link to this graveyard" />
         </div>
-        <button type="button" class="btn go hero-go" id="scan-sample">Scan the sample</button>
         <div class="tally" id="tally" hidden>
           <span><span class="dot alive"></span><span id="n-alive">0</span> alive</span>
           <span><span class="dot dead"></span><span id="n-dead">0</span> dead</span>
           <span><span class="dot possessed"></span><span id="n-possessed">0</span> possessed</span>
           <span><span class="dot restless"></span><span id="n-restless">0</span> restless</span>
         </div>
+        <form class="hero-form" id="hero-form" novalidate>
+          <label for="address">GitHub repo or page address</label>
+          <div class="hero-row">
+            <input id="address" class="field" type="text" inputmode="url" autocomplete="off" spellcheck="false" placeholder="owner/repo or https://..." />
+            <button type="submit" class="btn go" id="scan-address">Scan its links</button>
+          </div>
+          <p class="error" id="address-error" hidden>Paste a document or enter an address first.</p>
+        </form>
+        <div class="try" id="try">
+          <span>Try:</span>
+          <a href="/?repo=mtdvio/every-programmer-should-know">mtdvio/every-programmer-should-know</a>
+          <a href="/?repo=donnemartin/system-design-primer">donnemartin/system-design-primer</a>
+          <a href="/?repo=danistefanovic/build-your-own-x">danistefanovic/build-your-own-x</a>
+          <button type="button" class="btn" id="scan-sample">Scan the sample</button>
+        </div>
       </div>
-      <div class="moon" id="moon" role="progressbar" aria-label="Scan progress" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0">
-        <span class="shade"></span>
+      <div class="moonbox">
+        <span class="glow" aria-hidden="true"></span>
+        <div class="moon" id="moon" role="progressbar" aria-label="Scan progress" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0">
+          <span class="shade"></span>
+        </div>
       </div>
     </div>
+  </div>
 
-    <ol class="yard" id="yard" aria-label="Links in the document"></ol>
+  <div class="horizon" aria-hidden="true">
+    <svg class="hill" viewBox="0 0 1440 150" preserveAspectRatio="none" focusable="false">
+      <path d="M0 150V96C150 70 300 58 470 82s330 46 520 28 300-42 450-24V150Z" fill="#141b2d"></path>
+    </svg>
+    <svg class="tree" viewBox="0 0 140 150" focusable="false">
+      <path class="trunk" d="M61 150C63 128 60 112 62 95l8 0c0 17 2 35 6 55Z"></path>
+      <path class="b1" d="M65 100C54 88 44 80 34 60"></path>
+      <path class="b1" d="M67 98c11-12 23-18 35-38"></path>
+      <path class="b1" d="M66 98c-2-20 2-38-2-62"></path>
+      <path class="b2" d="M46 80c-8-2-16-4-26-2"></path>
+      <path class="b2" d="M38 67c-2-9-8-17-14-23"></path>
+      <path class="b2" d="M34 60c2-10 4-16 2-26"></path>
+      <path class="b2" d="M88 80c8 0 16-2 26 0"></path>
+      <path class="b2" d="M98 66c4-8 10-14 18-20"></path>
+      <path class="b2" d="M102 60c0-10-2-18 2-28"></path>
+      <path class="b2" d="M66 70c-8-8-12-16-16-28"></path>
+      <path class="b2" d="M66 58c8-8 12-16 14-28"></path>
+      <path class="b2" d="M64 36c-2-8-4-14-2-24"></path>
+    </svg>
+    <span class="fence l"></span>
+    <svg class="gate" viewBox="0 0 200 112" focusable="false">
+      <rect x="8" y="30" width="16" height="82"></rect>
+      <rect x="4" y="24" width="24" height="6"></rect>
+      <circle cx="16" cy="17" r="6"></circle>
+      <rect x="176" y="30" width="16" height="82"></rect>
+      <rect x="172" y="24" width="24" height="6"></rect>
+      <circle cx="184" cy="17" r="6"></circle>
+      <path d="M24 46Q100-6 176 46"></path>
+      <path d="M24 58Q100 10 176 58"></path>
+      <path d="M24 88H176"></path>
+      <path class="bars" d="M40 112V49M52 112V43.6M64 112V39.4M76 112V36.4M88 112V34.6M100 112V34M112 112V34.6M124 112V36.4M136 112V39.4M148 112V43.6M160 112V49"></path>
+    </svg>
+    <span class="fence r"></span>
   </div>
 </header>
+
+<div class="ground" id="ground">
+  <div class="mist" aria-hidden="true"><i></i><i></i></div>
+  <div class="wrap">
+    <ol class="yard" id="yard" aria-label="Links in the document"></ol>
+  </div>
+</div>
 
 <section class="inscription" id="inscription" aria-label="Selected link" hidden>
   <div class="wrap ins-wrap">
@@ -77,18 +134,12 @@
 
     <form class="doc" id="doc" novalidate>
       <div class="doc-source">
-        <label for="source">Document</label>
+        <label for="source">Or paste a document</label>
         <textarea id="source" class="field mono" rows="7" spellcheck="false" placeholder="Paste Markdown or HTML"></textarea>
         <p class="error" id="source-error" hidden>Paste a document or enter an address first.</p>
         <p class="hint">Links inside code blocks are skipped. A scan covers up to 200 links.</p>
-      </div>
-      <div class="doc-side">
-        <div>
-          <label for="address">Or a page address or GitHub repo</label>
-          <input id="address" class="field" type="text" inputmode="url" placeholder="https://example.org/post or owner/repo" />
-        </div>
         <div class="actions">
-          <button type="submit" class="btn go" id="scan">Scan the document</button>
+          <button type="submit" class="btn" id="scan">Scan the document</button>
           <button type="button" class="btn" id="sample">Load the sample</button>
         </div>
       </div>
@@ -100,7 +151,13 @@
           <h2 class="fell" id="ledger-title">Ledger</h2>
           <p class="ledger-note" id="patch-note"></p>
         </div>
-        <button type="button" class="btn" id="download" disabled>Download patched document</button>
+        <div class="ledger-actions">
+          <button type="button" class="btn" id="copy-patched" disabled>Copy patched document</button>
+          <button type="button" class="btn" id="download" disabled>Download patched document</button>
+          <a class="btn" id="gh-link" target="_blank" rel="noopener" hidden></a>
+        </div>
+        <ol class="ledger-note ledger-steps" id="fix-steps"></ol>
+        <textarea class="field mono" id="patched-fallback" rows="6" readonly hidden aria-label="Patched document: select it and press Ctrl+C"></textarea>
       </div>
       <table class="ledger" role="table">
         <caption class="sr-only">Every link and its verdict</caption>
