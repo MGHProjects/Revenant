@@ -246,6 +246,19 @@ Build Revenant as a TypeScript ESM project targeting Cloudflare Workers (web + W
     - _Requirements: 4.1, 6.6_
   - [x] 18.6 Field test in the README. After 18.1 to 18.3, run the CLI again on the four READMEs (first 200 links each) and add a "Field test" section to README.md: date, method, totals per verdict, and the story of this round (28 flagged, 11 false alarms of three kinds, each became a rule and a test). Only numbers from our own runs.
     - _Requirements: 7_
+- [ ] 19. Animations that mean something, and a section that explains the figures
+  - [x] 19.1 The scene assembles on load, once per page load; headline, text and form are not animated. Far hill opacity 0 to 1 in 900 ms; left fence, tree, then gate with the right fence: translateY(28px) to 0 and opacity 0 to 1, 900 ms, cubic-bezier(.16,1,.3,1), delays 120, 200, 280 ms; moon opacity 0 to 1 in 700 ms, delay 300 ms; mist starts at opacity 0 and reaches its computed value through its existing transition. Ends within 1.5 s. Nothing runs under `prefers-reduced-motion`. `costume.md` and the Costume check hook prompt: the horizon assembles once on load and never moves afterwards.
+    - _Requirements: 6.1, 6.7_
+  - [x] 19.2 Full moon. When a scan ends (not after "Ask again"), a diagonal highlight (115deg: transparent 40%, rgba(241,236,221,.28) 50%, transparent 60%) crosses each `.stone` left to right in 700 ms, 70 ms later per plot in document order; the glow behind the moon scales 1 to 1.12 to 1 in 1.4 s. Once per scan, together with the bell and the status sentence. Not under reduced motion.
+    - _Requirements: 6.1, 6.7_
+  - [x] 19.3 A candle on every raised grave. A candle (the given SVG, flame with the lit window's glow, breathing .85 to 1 over 3 s) stays at the foot of the figure on the ground line at `left: calc(50% + 40px)` once the link is raised, appearing with the `light` keyframes after the ghost has left; under reduced motion it is simply there. Never overlaps the next plot or a host label at 1440 and 375 px. `costume.md`: a candle means the link has been raised; its flame is not a verdict colour.
+    - _Requirements: 6.2, 6.4_
+  - [x] 19.4 What rises. A static section "What rises from a document" after the ledger (or after the document form when there is no ledger): four items (4 columns from 900 px, 2 below, 1 under 480 px), each with the real figure built by `scene.ts` standing on a 1 px ground line in a 130 px box, the verdict name in its colour and one sentence in the dim text colour; figures are `aria-hidden`, not buttons, and do not animate. Under the grid, "Three doors": this page, the command line, the MCP server, linking to the README sections with the real commands.
+    - _Requirements: 6.2_
+  - [~] 19.5 After the deploy, finish 17.9: retake the three README screenshots and `og.png` from production.
+    - _Requirements: 6_
+  - [x] 19.6 "Manual review" paragraph in the README Field test section (attributed to a review done by hand on 26 Nov 2026 outside our runs) and two new limits: review each archived copy before you commit it, and a domain that does not resolve today may come back.
+    - _Requirements: 7_
 ## Notes
 
 - All property-based test tasks (2.4, 3.3, 4.4, 4.8, 5.3, 6.5, 6.6, 9.4) and the scan integration test (6.7) are **mandatory** — they are the correctness evidence for the project.
@@ -324,7 +337,13 @@ Build Revenant as a TypeScript ESM project targeting Cloudflare Workers (web + W
     { "id": 60, "tasks": ["18.3"] },
     { "id": 61, "tasks": ["18.4"] },
     { "id": 62, "tasks": ["18.5"] },
-    { "id": 63, "tasks": ["18.6"] }
+    { "id": 63, "tasks": ["18.6"] },
+    { "id": 64, "tasks": ["19.1"] },
+    { "id": 65, "tasks": ["19.2"] },
+    { "id": 66, "tasks": ["19.3"] },
+    { "id": 67, "tasks": ["19.4"] },
+    { "id": 68, "tasks": ["19.5"] },
+    { "id": 69, "tasks": ["19.6"] }
   ]
 }
 ```

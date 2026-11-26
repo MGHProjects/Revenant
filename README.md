@@ -343,6 +343,17 @@ within 8 s, 2 answered 429, and one each answered 451, failed to connect, or red
 with too little text to compare. Revenant never calls these dead, so a site that blocks robots
 stays unchecked. I did not open the 64 restless links by hand.
 
+**Manual review.** On 26 Nov 2026 the project author also reviewed two READMEs by hand, outside
+the runs above. These are the author's hand counts. No table of ours sits behind them. The review
+covered the full READMEs of `codecrafters-io/build-your-own-x` (392 links) and
+`donnemartin/system-design-primer` (344 links), not the first 200 links that the runs above scanned.
+It found 14 dead links. All 14 fail at the cited address. Three of the 14 had moved to a live
+address: a renamed GitHub account, an article now on medium.com, and a SmartBear page at a new
+path. The right fix for those is the new address, which Revenant does not find. For the 11 that
+are gone, the archived copy Revenant chose was the real page in 9 of the 11. The other 2 were a
+"launching soon" placeholder (`creative-artworks.eu`, where the placeholder was captured for six
+years) and a redirect stub (`sj14.gitlab.io`). A good copy existed for both. One host,
+`codeslinger.co.uk`, did not resolve on the day but was captured alive on 3 Nov 2026.
 ## Limits worth knowing
 
 - `possessed` is only detected when the link redirects to another registrable domain. A hijacked domain that serves new content at the same address is reported `alive`.
@@ -357,6 +368,8 @@ stays unchecked. I did not open the 64 restless links by hand.
 - The Wayback Machine can throttle the Worker (HTTP 429) or time out under bursts of requests. A link that needed the archive for comparison is then `restless`, not `dead` or `possessed`. Repeated back-to-back CLI runs can show more `restless` links than a single run.
 - For `owner/repo` input, Revenant first tries `raw.githubusercontent.com` on the default branch for `README.md`, `readme.md`, `README`, `Readme.md` and `README.markdown`, which GitHub does not rate-limit. Only if none exists does it call the GitHub API (for READMEs with another name or in `docs/`). The unauthenticated API allows 60 requests per hour per IP, so set `GITHUB_TOKEN` in the CLI environment to raise that; the token is sent to the API only. If GitHub still rate-limits the request, the web app asks you to paste the document.
 - Outbound requests are limited to http and https hosts by name. IP literals, `localhost`, `*.local`, `*.internal`, `*.localhost` and URLs with credentials are refused, and the link is `restless` (not checked).
+- Review each archived copy before you commit it. Revenant picks the copy it judges best, but that choice can be a placeholder or a redirect stub. For a page that has moved, it finds the archived copy of the old address, not the new address.
+- A domain that does not resolve today may come back. A link judged dead because of a DNS failure reflects the day you scanned.
 
 ## Built with Kiro
 

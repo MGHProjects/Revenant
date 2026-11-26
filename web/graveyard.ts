@@ -11,8 +11,10 @@ import { extract } from '../src/core/extract.js';
 import sample from '../samples/haunted-readme.md?raw';
 import {
   LABEL,
+  buildFigure,
   createPlot,
   hostOf,
+  lifespanHeight,
   noSnapshotText,
   raisePlot,
   setMoon,
@@ -44,7 +46,11 @@ type Field = 'address' | 'source';
 
 const $ = <T extends HTMLElement = HTMLElement>(id: string): T => document.getElementById(id) as T;
 const yard = $('yard');
+const rvRoot = document.querySelector<HTMLElement>('.rv')!;
 const ground = $('ground');
+// The mist is held at 0 (class in the HTML) until the page has painted once, then its own
+// transition carries it to the computed value.
+requestAnimationFrame(() => requestAnimationFrame(() => ground.classList.remove('assembling')));
 const statusEl = $('status');
 const live = $('live');
 const source = $<HTMLTextAreaElement>('source');
@@ -474,6 +480,7 @@ async function runPool(tasks: Array<() => Promise<void>>, limit: number): Promis
 }
 
 function resetScene(): void {
+  clearMoonlight();
   yard.replaceChildren();
   scheduleLayout();
   views = [];
@@ -633,7 +640,33 @@ async function runScan(mode: Mode): Promise<void> {
   live.textContent = statusEl.textContent;
   selectDefault();
   bell();
+  moonlight();
 }
+
+// ---------------------------------------------------------------------------
+// Full moon (19.2)
+// ---------------------------------------------------------------------------
+
+const isMoonAnimation = (a: Animation): boolean => a instanceof CSSAnimation && a.animationName.startsWith('moon-');
+
+function clearMoonlight(): void {
+  rvRoot.classList.remove('moonlit');
+}
+
+/** Once per scan, when it has fully ended: moonlight crosses the stones and the glow swells. */
+function moonlight(): void {
+  clearMoonlight();
+  if (reduced()) return;
+  Array.from(yard.children).forEach((li, i) => (li as HTMLElement).style.setProperty('--i', String(i)));
+  void rvRoot.offsetWidth; // restart the animations if a previous scan left the class on
+  rvRoot.classList.add('moonlit');
+}
+
+const moonDone = (): void => {
+  if (rvRoot.classList.contains('moonlit') && !rvRoot.getAnimations({ subtree: true }).some(a => isMoonAnimation(a) && a.playState !== 'finished')) clearMoonlight();
+};
+rvRoot.addEventListener('animationend', moonDone);
+rvRoot.addEventListener('animationcancel', moonDone);
 
 // ---------------------------------------------------------------------------
 // Ask again
@@ -647,6 +680,8 @@ function applyReplacement(index: number, fresh: Judgement): void {
   judgements = merged.judgements;
   const full = judgements[index]!;
   const view = toGraveView(full, index);
+  // A link raised before stays raised while its new answer is still dead or possessed with a copy.
+  if (old.raised && view.snap && (view.verdict === 'dead' || view.verdict === 'possessed')) view.raised = true;
   views[index] = view;
 
   const oldPlot = plotAt(index);
@@ -864,6 +899,15 @@ copyBtn.addEventListener('click', () => {
     void scan('address');
   } else if (param.kind === 'invalid') showError(param.message, false, 'address');
 }
+
+// "What rises" (19.4): the same figures a plot uses. The stone shows a fixed sample life, 2005 to 2014.
+document.querySelectorAll<HTMLElement>('#explain [data-figure]').forEach(slot => {
+  const verdict = slot.dataset['figure'] as Verdict;
+  const life = { first: '2005-03-01', last: '2014-03-01', copy: '2013-06-01' };
+  const figure = buildFigure(verdict, { height: lifespanHeight(life), first: 2005, last: 2014 });
+  figure.setAttribute('aria-hidden', 'true');
+  slot.replaceWith(figure);
+});
 
 $('sample').addEventListener('click', () => {
   source.value = sample;

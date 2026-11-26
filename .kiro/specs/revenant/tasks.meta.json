@@ -2044,6 +2044,98 @@
         "chatSessionId": "sess_e72fc9f8-796b-436a-a688-fd774785d218",
         "timestamp": 1795691660063
       }
+    ],
+    "19.1 The scene assembles on load, once per page load; headline, text and form are not animated. Far hill opacity 0 to 1 in 900 ms; left fence, tree, then gate with the right fence: translateY(28px) to 0 and opacity 0 to 1, 900 ms, cubic-bezier(.16,1,.3,1), delays 120, 200, 280 ms; moon opacity 0 to 1 in 700 ms, delay 300 ms; mist starts at opacity 0 and reaches its computed value through its existing transition. Ends within 1.5 s. Nothing runs under `prefers-reduced-motion`. `costume.md` and the Costume check hook prompt: the horizon assembles once on load and never moves afterwards.": [
+      {
+        "executionId": "bb25c3a5-117f-4d3d-9cdb-477345c56a4e",
+        "chatSessionId": "sess_e72fc9f8-796b-436a-a688-fd774785d218",
+        "timestamp": 1795695314293
+      },
+      {
+        "executionId": "bb25c3a5-117f-4d3d-9cdb-477345c56a4e",
+        "chatSessionId": "sess_e72fc9f8-796b-436a-a688-fd774785d218",
+        "timestamp": 1795695321087
+      },
+      {
+        "executionId": "bb25c3a5-117f-4d3d-9cdb-477345c56a4e",
+        "chatSessionId": "sess_e72fc9f8-796b-436a-a688-fd774785d218",
+        "timestamp": 1795695927506
+      }
+    ],
+    "19.2 Full moon. When a scan ends (not after \"Ask again\"), a diagonal highlight (115deg: transparent 40%, rgba(241,236,221,.28) 50%, transparent 60%) crosses each `.stone` left to right in 700 ms, 70 ms later per plot in document order; the glow behind the moon scales 1 to 1.12 to 1 in 1.4 s. Once per scan, together with the bell and the status sentence. Not under reduced motion.": [
+      {
+        "executionId": "bb25c3a5-117f-4d3d-9cdb-477345c56a4e",
+        "chatSessionId": "sess_e72fc9f8-796b-436a-a688-fd774785d218",
+        "timestamp": 1795695314375
+      },
+      {
+        "executionId": "bb25c3a5-117f-4d3d-9cdb-477345c56a4e",
+        "chatSessionId": "sess_e72fc9f8-796b-436a-a688-fd774785d218",
+        "timestamp": 1795695928325
+      },
+      {
+        "executionId": "bb25c3a5-117f-4d3d-9cdb-477345c56a4e",
+        "chatSessionId": "sess_e72fc9f8-796b-436a-a688-fd774785d218",
+        "timestamp": 1795696352897
+      }
+    ],
+    "19.3 A candle on every raised grave. A candle (the given SVG, flame with the lit window's glow, breathing .85 to 1 over 3 s) stays at the foot of the figure on the ground line at `left: calc(50% + 40px)` once the link is raised, appearing with the `light` keyframes after the ghost has left; under reduced motion it is simply there. Never overlaps the next plot or a host label at 1440 and 375 px. `costume.md`: a candle means the link has been raised; its flame is not a verdict colour.": [
+      {
+        "executionId": "bb25c3a5-117f-4d3d-9cdb-477345c56a4e",
+        "chatSessionId": "sess_e72fc9f8-796b-436a-a688-fd774785d218",
+        "timestamp": 1795695314432
+      },
+      {
+        "executionId": "bb25c3a5-117f-4d3d-9cdb-477345c56a4e",
+        "chatSessionId": "sess_e72fc9f8-796b-436a-a688-fd774785d218",
+        "timestamp": 1795696354145
+      },
+      {
+        "executionId": "bb25c3a5-117f-4d3d-9cdb-477345c56a4e",
+        "chatSessionId": "sess_e72fc9f8-796b-436a-a688-fd774785d218",
+        "timestamp": 1795697173074
+      }
+    ],
+    "19.4 What rises. A static section \"What rises from a document\" after the ledger (or after the document form when there is no ledger): four items (4 columns from 900 px, 2 below, 1 under 480 px), each with the real figure built by `scene.ts` standing on a 1 px ground line in a 130 px box, the verdict name in its colour and one sentence in the dim text colour; figures are `aria-hidden`, not buttons, and do not animate. Under the grid, \"Three doors\": this page, the command line, the MCP server, linking to the README sections with the real commands.": [
+      {
+        "executionId": "bb25c3a5-117f-4d3d-9cdb-477345c56a4e",
+        "chatSessionId": "sess_e72fc9f8-796b-436a-a688-fd774785d218",
+        "timestamp": 1795695314483
+      },
+      {
+        "executionId": "bb25c3a5-117f-4d3d-9cdb-477345c56a4e",
+        "chatSessionId": "sess_e72fc9f8-796b-436a-a688-fd774785d218",
+        "timestamp": 1795697174433
+      },
+      {
+        "executionId": "bb25c3a5-117f-4d3d-9cdb-477345c56a4e",
+        "chatSessionId": "sess_e72fc9f8-796b-436a-a688-fd774785d218",
+        "timestamp": 1795697437309
+      }
+    ],
+    "19.5 After the deploy, finish 17.9: retake the three README screenshots and `og.png` from production.": [
+      {
+        "executionId": "bb25c3a5-117f-4d3d-9cdb-477345c56a4e",
+        "chatSessionId": "sess_e72fc9f8-796b-436a-a688-fd774785d218",
+        "timestamp": 1795695314536
+      }
+    ],
+    "19.6 \"Manual review\" paragraph in the README Field test section (attributed to a review done by hand on 26 Nov 2026 outside our runs) and two new limits: review each archived copy before you commit it, and a domain that does not resolve today may come back.": [
+      {
+        "executionId": "bb25c3a5-117f-4d3d-9cdb-477345c56a4e",
+        "chatSessionId": "sess_e72fc9f8-796b-436a-a688-fd774785d218",
+        "timestamp": 1795695314613
+      },
+      {
+        "executionId": "bb25c3a5-117f-4d3d-9cdb-477345c56a4e",
+        "chatSessionId": "sess_e72fc9f8-796b-436a-a688-fd774785d218",
+        "timestamp": 1795697437661
+      },
+      {
+        "executionId": "bb25c3a5-117f-4d3d-9cdb-477345c56a4e",
+        "chatSessionId": "sess_e72fc9f8-796b-436a-a688-fd774785d218",
+        "timestamp": 1795697504521
+      }
     ]
   }
 }

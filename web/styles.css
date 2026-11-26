@@ -122,6 +122,18 @@ a:hover { color: #f2a541; }
 .rv .fence.l { left: 0; right: calc(var(--gate) + 192px); }
 .rv .fence.r { right: 0; left: calc(100% - var(--gate) - 8px); }
 
+/* Load assembly: once per page load, plain CSS animations on the static elements. The "from" state
+   exists only inside the keyframes (fill backwards holds it during the delay), so under reduced
+   motion (animation: none) everything is at its final state. .sky clips the 28 px start offset. */
+.rv .hill { animation: assemble-fade .9s ease-out backwards; }
+.rv .fence.l { animation: assemble-rise .9s cubic-bezier(.16, 1, .3, 1) .12s backwards; }
+.rv .tree { animation: assemble-rise .9s cubic-bezier(.16, 1, .3, 1) .2s backwards; }
+.rv .gate, .rv .fence.r { animation: assemble-rise .9s cubic-bezier(.16, 1, .3, 1) .28s backwards; }
+/* The wrapper is animated: JS sets --shade on .moon and --progress on .sky, never on .moonbox. */
+.rv .moonbox { animation: assemble-fade .7s ease-out .3s backwards; }
+@keyframes assemble-fade { from { opacity: 0; } }
+@keyframes assemble-rise { from { opacity: 0; transform: translateY(28px); } }
+
 /* ---------- Ground and mist ---------- */
 /* Mist is what has not been judged: all of it before a scan, none after, except the share of links
    left restless. --mist (0 to 1) is set on .ground by web/graveyard.ts from web/mist.ts. The
@@ -139,6 +151,11 @@ a:hover { color: #f2a541; }
     radial-gradient(ellipse 17% 26% at 34% 60%, rgba(201, 210, 227, .15), transparent 70%),
     radial-gradient(ellipse 14% 38% at 60% 46%, rgba(201, 210, 227, .2), transparent 70%),
     radial-gradient(ellipse 16% 28% at 86% 62%, rgba(201, 210, 227, .15), transparent 70%);
+}
+/* Held at 0 until the page has painted (web/graveyard.ts removes .assembling), then the transition
+   above carries it to its computed value. Not held under reduced motion. */
+@media (prefers-reduced-motion: no-preference) {
+  .rv .ground.assembling .mist { opacity: 0; }
 }
 .rv .mist i + i { top: 36px; opacity: .7; animation-duration: 140s; animation-direction: alternate-reverse; }
 
@@ -189,6 +206,7 @@ a:hover { color: #f2a541; }
 .rv .plot[aria-pressed="true"]::after { transform: scaleX(1); }
 
 .rv .stone {
+  position: relative; overflow: hidden;
   width: 64px; height: var(--h, 64px); padding: 10px 8px; border-radius: 32px 32px 3px 3px;
   /* The moon is up on the right: stones catch it on their top and right edge. */
   background: linear-gradient(250deg, #56627d, #3f495f 62%); box-shadow: inset -1px 1px 0 rgba(241, 236, 221, .3);
@@ -196,6 +214,18 @@ a:hover { color: #f2a541; }
   font-family: "IM Fell English", Georgia, serif; font-size: 15px; line-height: 1; color: #f1ecdd;
 }
 .rv .stone .rule { width: 18px; height: 1px; background: #b8b4a6; }
+/* Full moon (19.2): web/graveyard.ts adds .moonlit to .rv once when a scan has ended, and removes it
+   when the animations finish. The sheen exists only under that class; its start position lives only
+   in the keyframes. --i is the plot's index in the yard, set on each <li> by JS. Under reduced motion
+   the class is never added (and the rule at the end stops any animation). */
+.rv.moonlit .yard .stone::after {
+  content: ""; position: absolute; inset: 0; border-radius: inherit; pointer-events: none;
+  background: linear-gradient(115deg, transparent 40%, rgba(241, 236, 221, .28) 50%, transparent 60%);
+  animation: moon-sheen .7s ease-in-out calc(var(--i, 0) * 70ms) both;
+}
+.rv.moonlit .glow { animation: moon-swell 1.4s ease-in-out; }
+@keyframes moon-sheen { from { transform: translateX(-100%); } to { transform: translateX(100%); } }
+@keyframes moon-swell { 50% { transform: scale(1.12); } }
 .rv .lamp {
   animation: light 1.7s ease-out both; animation-delay: var(--d, 0ms);
   filter: drop-shadow(0 0 10px rgba(242, 165, 65, .6));
@@ -209,6 +239,19 @@ a:hover { color: #f2a541; }
 .rv .ghost {
   position: absolute; bottom: 0; left: 50%; margin-left: -22px;
   animation: ghost 1.2s cubic-bezier(.16, 1, .3, 1) both; pointer-events: none;
+}
+/* Candle (19.3): stays for as long as the link is raised. bottom: 0 is the figure's padding edge,
+   which is the top of its 1 px bottom border: the base sits on the ground line. Overflow stays
+   visible so the flame's glow is not cut by the 14 px viewport. When it is lit by a fresh raise
+   (.lighting) it is added to the DOM when the 1.3 s ghost has left and plays `light` at once; the
+   start state lives only in the keyframes, so reduced motion shows the final state at once. */
+.rv .candle {
+  position: absolute; bottom: 0; left: min(calc(50% + 40px), calc(100% - 16px)); overflow: visible; pointer-events: none;
+}
+.rv .candle.lighting { animation: light 1.7s ease-out both; }
+.rv .candle .flame {
+  filter: drop-shadow(0 0 8px rgba(242, 165, 65, .6));
+  animation: breathe 3s ease-in-out infinite alternate;
 }
 
 /* ---------- Inscription ---------- */
@@ -280,6 +323,7 @@ a:hover { color: #f2a541; }
   0%, 100% { filter: drop-shadow(0 0 5px rgba(125, 255, 176, .3)); }
   50% { filter: drop-shadow(0 0 16px rgba(125, 255, 176, .7)); }
 }
+@keyframes breathe { from { opacity: .85; } to { opacity: 1; } }
 @keyframes drift { from { transform: translateX(-7px); } to { transform: translateX(7px); } }
 @keyframes ghost {
   0% { transform: translateY(30px); opacity: 0; }
@@ -288,6 +332,20 @@ a:hover { color: #f2a541; }
 }
 @keyframes mist { from { transform: translateX(-12%); } to { transform: translateX(12%); } }
 @keyframes fade { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+
+/* ---------- What rises (19.4) ---------- */
+/* Static: the figures come from buildFigure (scene.ts), the same as a plot's, in a 130 px box on the
+   same ground line. Nothing here animates, so no animation rule above reaches it. */
+.rv .explain h2 { margin: 0 0 20px; font-size: 34px; line-height: 1.1; }
+.rv .explain-grid { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: minmax(0, 1fr); gap: 32px 24px; }
+.rv .explain-grid .figure { height: 130px; }
+.rv .explain .riser, .rv .explain .lamp, .rv .explain .hand, .rv .explain .fog span { animation: none; }
+.rv .explain-grid .verdict { display: block; margin-top: 14px; font-size: 18px; font-weight: 600; }
+.rv .explain-grid p { margin: 6px 0 0; font-size: 15px; color: #b8b4a6; }
+.rv .doors-title { margin: 48px 0 12px; font-size: 24px; line-height: 1.2; }
+.rv .doors { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 10px; color: #b8b4a6; font-size: 15px; }
+@media (min-width: 480px) { .rv .explain-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (min-width: 900px) { .rv .explain-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
 
 @media (max-width: 760px) {
   .rv .wrap { padding-inline: 20px; }

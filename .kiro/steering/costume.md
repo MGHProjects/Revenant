@@ -18,13 +18,18 @@ its links rise out of it one by one as the scan streams in.
 - **Mist** is what has not been judged. Its opacity is (links still waiting + restless links) / total, 1 before a scan.
 - **Moonlight** follows progress. The glow behind the moon brightens with the same value that waxes the moon.
 - **Resurrect** raises a pale ghost from the grave that becomes the link to the snapshot.
+- A **candle** means the link has been raised. Its flame is not a verdict colour; the label text ("raised") stays the primary signal.
+- The **"What rises" section** shows the four verdict shapes once, static, as examples beside their names and
+  explanations. They are the same figures a plot uses, `aria-hidden`, and carry no state of any link.
 - A plain **ledger** (accessible table) sits below the scene with the same data. The scene is
   never the only way to read a result.
 
 ## Scenery
 
-The horizon (hill, tree, fence, gate) is static, uses ink only (`#0b0d12` and `#141b2d`), is
-`aria-hidden`, is never animated, and never uses a verdict shape (window, tombstone, hand, fog bars)
+The horizon (hill, tree, fence, gate) assembles once when the page loads (plain CSS animations,
+under 1.5 s, the "from" state only inside the keyframes so reduced motion shows the final state at
+once) and never moves afterwards. It uses ink only (`#0b0d12` and `#141b2d`), is
+`aria-hidden`, and never uses a verdict shape (window, tombstone, hand, fog bars)
 or a verdict colour (amber, ectoplasm, bone used for labels, the restless fog colour). It is the only
 element that carries no state.
 

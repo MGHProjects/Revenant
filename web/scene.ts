@@ -130,6 +130,8 @@ const CHAPEL = '<svg width="72" height="104" viewBox="0 0 72 104" aria-hidden="t
 const HAND = '<svg class="hand" width="64" height="120" viewBox="0 0 64 120" aria-hidden="true" fill="#7dffb0"><rect x="22" y="66" width="20" height="54" rx="4"/><rect x="14" y="44" width="37" height="34" rx="10"/><rect x="14" y="14" width="8" height="40" rx="4"/><rect x="24" y="4" width="8" height="48" rx="4"/><rect x="34" y="8" width="8" height="44" rx="4"/><rect x="44" y="18" width="7" height="36" rx="3.5"/><rect x="10" y="52" width="9" height="24" rx="4.5" transform="rotate(-28 14.5 74)"/></svg>';
 const GHOST = '<svg class="ghost" width="44" height="56" viewBox="0 0 44 56" aria-hidden="true"><path d="M4 56V22a18 18 0 0 1 36 0v34l-6-6-6 6-6-6-6 6-6-6Z" fill="#f1ecdd"/><circle cx="16" cy="24" r="2.5" fill="#0b0d12"/><circle cx="28" cy="24" r="2.5" fill="#0b0d12"/></svg>';
 
+const CANDLE = '<svg class="candle" width="14" height="26" viewBox="0 0 14 26" aria-hidden="true"><rect x="4" y="12" width="6" height="14" rx="1" fill="#b8b4a6"/><path class="flame" d="M7 1c3 4 4 6 4 8a4 4 0 0 1-8 0c0-2 1-4 4-8Z" fill="#f2a541"/></svg>';
+
 function fromStatic(markup: string): Element {
   const t = document.createElement('template');
   t.innerHTML = markup;
@@ -147,15 +149,34 @@ function el<K extends keyof HTMLElementTagNameMap>(tag: K, className?: string, t
 // Shapes and plots
 // ---------------------------------------------------------------------------
 
-function createShape(v: GraveView): Node {
-  switch (v.verdict) {
+/** What a figure needs beyond its verdict: a stone's height and the years carved on it. */
+export interface FigureOptions {
+  height?: number;
+  first?: number;
+  last?: number;
+}
+
+/**
+ * The `.figure` of one verdict: the single source of the chapel, stone, hand and fog shapes,
+ * used by every plot and by the "What rises" section.
+ */
+export function buildFigure(verdict: Verdict, options: FigureOptions = {}): HTMLElement {
+  const figure = el('span', 'figure');
+  const riser = el('span', 'riser');
+  riser.append(createShape(verdict, options));
+  figure.append(riser);
+  return figure;
+}
+
+function createShape(verdict: Verdict, o: FigureOptions): Node {
+  switch (verdict) {
     case 'alive':
       return fromStatic(CHAPEL);
     case 'dead': {
       const stone = el('span', 'stone');
-      stone.style.setProperty('--h', `${v.height}px`);
-      if (v.first !== undefined && v.last !== undefined) {
-        stone.append(el('span', undefined, String(v.first)), el('span', 'rule'), el('span', undefined, String(v.last)));
+      stone.style.setProperty('--h', `${o.height ?? 64}px`);
+      if (o.first !== undefined && o.last !== undefined) {
+        stone.append(el('span', undefined, String(o.first)), el('span', 'rule'), el('span', undefined, String(o.last)));
       }
       return stone;
     }
@@ -199,27 +220,47 @@ export function createPlot(v: GraveView, delay: number): HTMLLIElement {
   btn.setAttribute('aria-pressed', 'false');
   btn.style.setProperty('--d', `${delay}ms`);
 
-  const figure = el('span', 'figure');
-  const riser = el('span', 'riser');
-  riser.append(createShape(v));
-  figure.append(riser);
+  const figure = buildFigure(v.verdict, v);
+  // A plot built again for a link that is already raised (Ask again) keeps its candle, lit at once.
+  if (v.raised) addCandle(figure, v, false);
 
   btn.append(figure, hostLabel(v.host), el('span', 'verdict', plotLabel(v)));
   li.append(btn);
   return li;
 }
 
-/** Marks the plot raised and lets a pale ghost leave the grave for 1.3 s. */
+/**
+ * A candle at the foot of the figure, for as long as the link is raised. Only dead and possessed
+ * links can be raised. `lighting` plays the `light` keyframes (styles.css); the caller adds it once the ghost has left.
+ */
+function addCandle(figure: Element, v: GraveView, lighting: boolean): void {
+  if (v.verdict !== 'dead' && v.verdict !== 'possessed') return;
+  if (figure.querySelector('.candle')) return;
+  const candle = fromStatic(CANDLE);
+  if (lighting) candle.classList.add('lighting');
+  figure.append(candle);
+}
+
+/** Marks the plot raised, lights its candle and lets a pale ghost leave the grave for 1.3 s. */
 export function raisePlot(plot: HTMLElement, v: GraveView, showGhost: boolean): void {
   const label = plot.querySelector('.verdict');
   if (label) label.textContent = plotLabel(v);
-  if (!showGhost) return;
   const figure = plot.querySelector('.figure');
   if (!figure) return;
+  if (!showGhost) {
+    addCandle(figure, v, false);
+    return;
+  }
   figure.querySelector('.ghost')?.remove();
   const ghost = fromStatic(GHOST);
   figure.append(ghost);
-  setTimeout(() => ghost.remove(), 1300);
+  // The candle is lit when the ghost has left. A plot removed by a new scan, or a ghost replaced
+  // by a later raise, gets nothing from this timer.
+  setTimeout(() => {
+    const present = ghost.isConnected && plot.isConnected;
+    ghost.remove();
+    if (present) addCandle(figure, v, true);
+  }, 1300);
 }
 
 // ---------------------------------------------------------------------------

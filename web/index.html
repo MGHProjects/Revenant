@@ -103,7 +103,7 @@
   </div>
 </header>
 
-<div class="ground" id="ground">
+<div class="ground assembling" id="ground">
   <div class="mist" aria-hidden="true"><i></i><i></i></div>
   <div class="wrap">
     <ol class="yard" id="yard" aria-label="Links in the document"></ol>
@@ -172,6 +172,38 @@
         </thead>
         <tbody id="rows" role="rowgroup"></tbody>
       </table>
+    </section>
+
+    <section class="explain" aria-labelledby="explain-title" id="explain">
+      <h2 class="fell" id="explain-title">What rises from a document</h2>
+      <ul class="explain-grid">
+        <li class="alive">
+          <div data-figure="alive"></div>
+          <span class="verdict">Alive</span>
+          <p>The link still answers with the page you cited.</p>
+        </li>
+        <li class="dead">
+          <div data-figure="dead"></div>
+          <span class="verdict">Dead</span>
+          <p>Nothing answers: a 404, a 410 or a domain that no longer exists. The stone's height is how long the page lived in the archive.</p>
+        </li>
+        <li class="possessed">
+          <div data-figure="possessed"></div>
+          <span class="verdict">Possessed</span>
+          <p>The address answers, but it now leads to another site that does not show what you cited.</p>
+        </li>
+        <li class="restless">
+          <div data-figure="restless"></div>
+          <span class="verdict">Restless</span>
+          <p>The site would not answer a robot, or took too long. Revenant does not guess.</p>
+        </li>
+      </ul>
+      <h3 class="fell doors-title">Three doors</h3>
+      <ul class="doors">
+        <li><a href="https://github.com/MGHProjects/Revenant#try-it" target="_blank" rel="noopener">This page</a>: paste a README or give it a repo, and the graveyard shows what died.</li>
+        <li><a href="https://github.com/MGHProjects/Revenant#cli" target="_blank" rel="noopener">The command line</a>: fails a CI job when a README has dead links.</li>
+        <li><a href="https://github.com/MGHProjects/Revenant#mcp-server" target="_blank" rel="noopener">The MCP server</a>: lets an agent check a link before it cites it.</li>
+      </ul>
     </section>
 
   </div>
