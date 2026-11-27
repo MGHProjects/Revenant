@@ -272,16 +272,16 @@ Imports go one way: `worker`, `cli`, `mcp` and `web` use `net`, and `net` uses `
 
 ## Field test
 
-Run on 26 Nov 2026, from source at commit `e35b928`. The working tree had uncommitted changes:
+Run on 26 Nov 2026, from source at commit `7637241`. The working tree had uncommitted changes:
 the fixes described below were not yet committed.
 
 **Method.** The first 200 links of four public READMEs, one README at a time, with
-`revenant <owner/repo> --json` on a local machine (Node 22). No `GITHUB_TOKEN`. Requests to the
-Internet Archive went one at a time with a 1 s gap. After each run I opened every dead and
-possessed link myself (an HTTP request that follows redirects, a DNS lookup, and for possessed
+`revenant <owner/repo> --json` on a local machine (Node 22), run from Kiro. No `GITHUB_TOKEN`. Requests to the
+Internet Archive went one at a time with a 1 s gap. After each run an agent run from Kiro opened every dead and
+possessed link (an HTTP request that follows redirects, a DNS lookup, and for possessed
 links a look at the archived copy) and classified it. Here, a **true positive** means the page
 the author cited can no longer be read at that address. A **false alarm** means the cited
-content can still be read at the place the link leads to. **Unclear** means I could not decide
+content can still be read at the place the link leads to. **Unclear** means the agent could not decide
 from a few requests.
 
 | README | Links scanned | Alive | Dead | Possessed | Restless | Dead or possessed with an archived copy |
@@ -318,7 +318,7 @@ as dead or possessed. 11 of the 28 were false alarms, of three kinds. Each becam
 **This run.** The READMEs themselves may have changed since the first run, so the two runs
 are not a before and after on identical input. The first run found 28 flagged links of 768; this
 one found 29 of 768. None of the 29 is a Wikipedia, `twitter.com` or `exercism.io` link, none has
-`archiveUnavailable`, and all 29 have an archived copy. My classification of the 29:
+`archiveUnavailable`, and all 29 have an archived copy. The agent's classification of the 29:
 
 | Classification | Count | Links |
 |---|---|---|
@@ -341,7 +341,7 @@ right when the page you cited is gone and wrong when the new site holds the same
 Revenant does not tell these apart. Of the 64 restless links, 55 answered 403 to robots, 4 did not answer
 within 8 s, 2 answered 429, and one each answered 451, failed to connect, or redirected to a page
 with too little text to compare. Revenant never calls these dead, so a site that blocks robots
-stays unchecked. I did not open the 64 restless links by hand.
+stays unchecked. The agent did not open the 64 restless links.
 
 **Manual review.** On 26 Nov 2026 the project author also reviewed two READMEs by hand, outside
 the runs above. These are the author's hand counts. No table of ours sits behind them. The review

@@ -25,13 +25,14 @@ Paste Markdown/HTML, a page URL, or `owner/repo`. Every link gets one verdict:
 
 | Verdict | Costume | Meaning |
 |---|---|---|
-| `alive` | lit window | Responds, content still matches its archived self |
-| `dead` | tombstone | Gone (DNS failure, 404/410, persistent 5xx) |
-| `possessed` | green-eyed zombie | Responds, but now redirects to another domain whose content is nothing like the archived page |
-| `restless` | fog | Cannot tell (401/403/429/timeout). Never reported as dead |
+| `alive` | lit window | Answers 2xx. After a redirect to another registrable domain the content is compared with the archive; a rename (same site, new name or suffix) is still alive |
+| `dead` | tombstone | Gone (404/410, or the domain no longer resolves). A 5xx is never dead |
+| `possessed` | hand with a green glow | Answers, but redirects to another registrable domain and is under 20% like the archived page |
+| `restless` | fog | Cannot tell (401/403/429, 5xx twice, timeout, connection error, blocked address, archive unreachable, too little text to compare). Never reported as dead |
 
-Dead and possessed links get an **epitaph** (first and last good capture dates from the Wayback
-Machine) and a **resurrection**: the closest good snapshot URL. The user downloads the patched
+Dead and possessed links get an **epitaph** (first and last capture of the longest continuous life in
+the Internet Archive, plus the date of the copy) and a **resurrection**: the archived copy Revenant
+judges best, stepped back up to a year from the last capture. The user downloads the patched
 document, or runs the same engine as a CLI in CI, or as an MCP tool inside an agent.
 
 ## Principles

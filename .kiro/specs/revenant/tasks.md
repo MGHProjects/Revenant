@@ -259,6 +259,15 @@ Build Revenant as a TypeScript ESM project targeting Cloudflare Workers (web + W
     - _Requirements: 6_
   - [x] 19.6 "Manual review" paragraph in the README Field test section (attributed to a review done by hand on 26 Nov 2026 outside our runs) and two new limits: review each archived copy before you commit it, and a domain that does not resolve today may come back.
     - _Requirements: 7_
+- [x] 20. Production review: jumps, shifts and wording
+  - [x] 20.1 Resurrect makes the page jump. At 1440x1080 pressing Resurrect scrolls the page from 0 to 540 px, so the ghost rises out of view. Cause: `graveyard.ts` focuses the "Open the archived page" link, inside the sticky inscription band, while `html` has `scroll-padding-bottom` equal to the band's height, so the browser centres the link. Focus elements inside the band with `{ preventScroll: true }` (the focus after Resurrect and the one after Ask again); keep `scroll-padding-bottom` for the plots. Test: after Resurrect `window.scrollY` is unchanged.
+    - _Requirements: 6.4, 6.8_
+  - [x] 20.2 The layout shifts when a scan ends. During a scan the address form is hidden; when it returns the yard moves down 133 px (418 to 551). Keep the form's space during the scan (disabled, not removed) so nothing below it moves.
+    - _Requirements: 6.1_
+  - [x] 20.3 `product.md` is out of date: the verdict table says dead includes "persistent 5xx" and possessed is a "green-eyed zombie", and the text says "the closest good snapshot URL". Rewrite those lines to the current rules.
+    - _Requirements: 2, 3_
+  - [x] 20.4 Answers to two open questions. README Field test wording: the links were checked by an agent run from Kiro, not "I opened". Result headline: when some links are restless, do not say "All": "{n} links still lead where they should. {m} could not be judged."
+    - _Requirements: 6.16, 7_
 ## Notes
 
 - All property-based test tasks (2.4, 3.3, 4.4, 4.8, 5.3, 6.5, 6.6, 9.4) and the scan integration test (6.7) are **mandatory** — they are the correctness evidence for the project.
@@ -343,7 +352,11 @@ Build Revenant as a TypeScript ESM project targeting Cloudflare Workers (web + W
     { "id": 66, "tasks": ["19.3"] },
     { "id": 67, "tasks": ["19.4"] },
     { "id": 68, "tasks": ["19.5"] },
-    { "id": 69, "tasks": ["19.6"] }
+    { "id": 69, "tasks": ["19.6"] },
+    { "id": 70, "tasks": ["20.1"] },
+    { "id": 71, "tasks": ["20.2"] },
+    { "id": 72, "tasks": ["20.3"] },
+    { "id": 73, "tasks": ["20.4"] }
   ]
 }
 ```

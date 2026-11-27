@@ -49,6 +49,7 @@ a:hover { color: #f2a541; }
 }
 .rv .field::placeholder { color: #9a9788; }
 .rv .field:focus { border-color: #f1ecdd; }
+.rv .field:disabled { opacity: .45; cursor: not-allowed; }
 .rv .field[aria-invalid="true"] { border-color: #c8323c; }
 .rv label { display: block; font-size: 14px; font-weight: 600; margin-bottom: 8px; }
 

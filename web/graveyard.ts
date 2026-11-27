@@ -69,6 +69,7 @@ const stepsEl = $('fix-steps');
 const soundBtn = $<HTMLButtonElement>('sound');
 const rowsEl = $('rows');
 const sampleScanBtn = $<HTMLButtonElement>('scan-sample');
+const addressBtn = $<HTMLButtonElement>('scan-address');
 const copyBtn = $<HTMLButtonElement>('copy-link');
 const copyFallback = $<HTMLInputElement>('copy-fallback');
 
@@ -131,11 +132,15 @@ function syncChrome(): void {
   $('tally').hidden = !has;
   $('inscription').hidden = !has;
   // Before results the hero invites a first scan: explanation, address form, Try row, sample.
-  // While scanning it shows progress only. With results it keeps the address form, below the
-  // tally, so another address can be scanned, and drops the onboarding (explanation, Try row).
+  // The address form is never hidden: while scanning its controls are disabled in place, so the
+  // blocks below it do not move when the scan ends. The explanation and the Try row go at scan
+  // start (before the first plot) and stay away while results exist; if a scan fails with no
+  // results they come back.
   intro.hidden = scanning || has;
   tryRow.hidden = scanning || has;
-  heroForm.hidden = scanning;
+  address.disabled = scanning;
+  addressBtn.disabled = scanning;
+  sampleScanBtn.disabled = scanning;
 }
 
 /** Mist = links still waiting plus restless ones, over all links (web/mist.ts). */
@@ -267,7 +272,8 @@ function resurrect(i: number, focusLink = false): void {
   const plot = plotAt(i);
   if (plot) raisePlot(plot, v, !reduced());
   select(i);
-  if (focusLink) document.querySelector<HTMLAnchorElement>('#ins-action a')?.focus();
+  // The link sits in the sticky band; html's scroll-padding-bottom would make the browser scroll to centre it.
+  if (focusLink) document.querySelector<HTMLAnchorElement>('#ins-action a')?.focus({ preventScroll: true });
   live.textContent = `${v.host} raised. The archived page is ready to open.`;
 }
 
@@ -515,8 +521,10 @@ async function scan(mode: Mode): Promise<void> {
   resetScene();
   copyBtn.hidden = true;
   copyFallback.hidden = true;
-  // the hero input hides while scanning: park focus on the status heading so it is not lost
-  if (heroForm.contains(document.activeElement) || tryRow.contains(document.activeElement)) statusEl.focus();
+  // the hero controls are disabled while scanning (and the Try row hides): a focused control would
+  // lose focus to the body, so park it on the status heading first
+  if (heroForm.contains(document.activeElement) || tryRow.contains(document.activeElement)) statusEl.focus({ preventScroll: true });
+  syncChrome();
   try {
     await runScan(mode);
   } finally {
@@ -732,7 +740,8 @@ async function askAgain(index: number): Promise<void> {
   }
   if (buttonHadFocus && selected === index) {
     const btn = document.getElementById('ask-again');
-    if (btn) btn.focus();
+    // The button is in the sticky band: restoring focus must not scroll the page.
+    if (btn) btn.focus({ preventScroll: true });
     else plotAt(index)?.focus();
   }
 }

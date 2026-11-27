@@ -19,7 +19,14 @@ describe('resultHeadline', () => {
     expect(h({ total: 1 })).toBe('All 1 link still leads where it should.');
   });
   it('appends the restless count', () => {
-    expect(h({ restless: 1 })).toBe('All 9 links still lead where they should. 1 could not be judged.');
+    expect(h({ restless: 1 })).toBe('8 links still lead where they should. 1 could not be judged.');
+    expect(h({ restless: 2 })).toBe('7 links still lead where they should. 2 could not be judged.');
+    expect(h({ total: 6, restless: 1 })).toBe('5 links still lead where they should. 1 could not be judged.');
+    expect(h({ total: 2, restless: 1 })).toBe('1 link still leads where it should. 1 could not be judged.');
+    expect(h({ total: 9, restless: 9 })).toBe('None could be judged.');
+    expect(h({ total: 1, restless: 1 })).toBe('None could be judged.');
+    expect(h({ total: 6, dead: 1, fixable: 0 })).toBe('1 of 6 links is gone. None can come back.');
+    expect(h({ total: 9, dead: 2, possessed: 1, fixable: 3, restless: 1 })).toBe('3 of 9 links are gone. 3 can come back. 1 could not be judged.');
     expect(h({ dead: 2, fixable: 1, restless: 3 })).toBe('2 of 9 links are gone. 1 can come back. 3 could not be judged.');
   });
   it('builds from the judged links when a batch failed', () => {
@@ -60,10 +67,15 @@ describe('Property 20: the result headline states the counts and the grammar is 
         if (r.gone > 0) {
           expect(text).toContain(`${r.gone} of ${r.judged} `);
           expect(text).toContain(r.fixable > 0 ? `${r.fixable} can come back.` : 'None can come back.');
-        } else {
+        } else if (r.restless === 0) {
           expect(text).toContain(`All ${r.judged} `);
+        } else if (r.alive === 0) {
+          expect(text).toContain('None could be judged.');
+        } else {
+          expect(text).toContain(`${r.alive} ${r.alive === 1 ? 'link still leads' : 'links still lead'} `);
         }
-        if (r.restless > 0) expect(text.endsWith(`${r.restless} could not be judged.`)).toBe(true);
+        if (r.restless > 0) expect(text).not.toMatch(/\bAll\b/);
+        if (r.restless > 0 && (r.gone > 0 || r.alive > 0)) expect(text.endsWith(`${r.restless} could not be judged.`)).toBe(true);
         else expect(text).not.toContain('could not be judged');
       }),
       { numRuns: 200 },

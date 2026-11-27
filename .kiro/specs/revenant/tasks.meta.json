@@ -2136,6 +2136,81 @@
         "chatSessionId": "sess_e72fc9f8-796b-436a-a688-fd774785d218",
         "timestamp": 1795697504521
       }
+    ],
+    "20.1 Resurrect makes the page jump. At 1440x1080 pressing Resurrect scrolls the page from 0 to 540 px, so the ghost rises out of view. Cause: `graveyard.ts` focuses the \"Open the archived page\" link, inside the sticky inscription band, while `html` has `scroll-padding-bottom` equal to the band's height, so the browser centres the link. Focus elements inside the band with `{ preventScroll: true }` (the focus after Resurrect and the one after Ask again); keep `scroll-padding-bottom` for the plots. Test: after Resurrect `window.scrollY` is unchanged.": [
+      {
+        "executionId": "2a17d706-57d5-4cec-a226-de87827806f4",
+        "chatSessionId": "sess_e72fc9f8-796b-436a-a688-fd774785d218",
+        "timestamp": 1795735897352
+      },
+      {
+        "executionId": "2a17d706-57d5-4cec-a226-de87827806f4",
+        "chatSessionId": "sess_e72fc9f8-796b-436a-a688-fd774785d218",
+        "timestamp": 1795735905159
+      },
+      {
+        "executionId": "2a17d706-57d5-4cec-a226-de87827806f4",
+        "chatSessionId": "sess_e72fc9f8-796b-436a-a688-fd774785d218",
+        "timestamp": 1795736585682
+      }
+    ],
+    "20.2 The layout shifts when a scan ends. During a scan the address form is hidden; when it returns the yard moves down 133 px (418 to 551). Keep the form's space during the scan (disabled, not removed) so nothing below it moves.": [
+      {
+        "executionId": "2a17d706-57d5-4cec-a226-de87827806f4",
+        "chatSessionId": "sess_e72fc9f8-796b-436a-a688-fd774785d218",
+        "timestamp": 1795735897531
+      },
+      {
+        "executionId": "2a17d706-57d5-4cec-a226-de87827806f4",
+        "chatSessionId": "sess_e72fc9f8-796b-436a-a688-fd774785d218",
+        "timestamp": 1795736586618
+      },
+      {
+        "executionId": "2a17d706-57d5-4cec-a226-de87827806f4",
+        "chatSessionId": "sess_e72fc9f8-796b-436a-a688-fd774785d218",
+        "timestamp": 1795736879528
+      }
+    ],
+    "20.3 `product.md` is out of date: the verdict table says dead includes \"persistent 5xx\" and possessed is a \"green-eyed zombie\", and the text says \"the closest good snapshot URL\". Rewrite those lines to the current rules.": [
+      {
+        "executionId": "2a17d706-57d5-4cec-a226-de87827806f4",
+        "chatSessionId": "sess_e72fc9f8-796b-436a-a688-fd774785d218",
+        "timestamp": 1795735897651
+      },
+      {
+        "executionId": "2a17d706-57d5-4cec-a226-de87827806f4",
+        "chatSessionId": "sess_e72fc9f8-796b-436a-a688-fd774785d218",
+        "timestamp": 1795735905267
+      },
+      {
+        "executionId": "2a17d706-57d5-4cec-a226-de87827806f4",
+        "chatSessionId": "sess_e72fc9f8-796b-436a-a688-fd774785d218",
+        "timestamp": 1795736585841
+      }
+    ],
+    "20.4 Answers to two open questions. README Field test wording: the links were checked by an agent run from Kiro, not \"I opened\". Result headline: when some links are restless, do not say \"All\": \"{n} links still lead where they should. {m} could not be judged.\"": [
+      {
+        "executionId": "2a17d706-57d5-4cec-a226-de87827806f4",
+        "chatSessionId": "sess_e72fc9f8-796b-436a-a688-fd774785d218",
+        "timestamp": 1795735897746
+      },
+      {
+        "executionId": "2a17d706-57d5-4cec-a226-de87827806f4",
+        "chatSessionId": "sess_e72fc9f8-796b-436a-a688-fd774785d218",
+        "timestamp": 1795736879666
+      },
+      {
+        "executionId": "2a17d706-57d5-4cec-a226-de87827806f4",
+        "chatSessionId": "sess_e72fc9f8-796b-436a-a688-fd774785d218",
+        "timestamp": 1795736987849
+      }
+    ],
+    "20. Production review: jumps, shifts and wording": [
+      {
+        "executionId": "2a17d706-57d5-4cec-a226-de87827806f4",
+        "chatSessionId": "sess_e72fc9f8-796b-436a-a688-fd774785d218",
+        "timestamp": 1795736987953
+      }
     ]
   }
 }
