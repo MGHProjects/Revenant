@@ -2,3 +2,7 @@ node_modules/
 dist/
 .wrangler/
 .dev.vars
+
+# private notes: the Devpost draft and the author's guide stay out of the repository
+docs/submission.md
+docs/GUIA-KIRO.es.md
